@@ -139,7 +139,7 @@ export function App() {
       );
       return;
     }
-    if (text.length > MAX_SOURCE_CHARS) {
+    if (!attachment && text.length > MAX_SOURCE_CHARS) {
       say("Dữ liệu quá dài. Vui lòng rút gọn còn dưới 30.000 ký tự.");
       return;
     }
