@@ -104,16 +104,22 @@ export async function askJson<T>(
   attachment?: FileAttachment,
 ): Promise<T> {
   let output = await askAi(role, system, user, settings, signal, attachment);
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3; i++) {
     let parsed: ReturnType<typeof schema.safeParse>;
     try {
+      const cleaned = output.replace(/^```(?:json)?\s*|\s*```$/g, "");
+      const first = cleaned.indexOf("{");
+      const last = cleaned.lastIndexOf("}");
       parsed = schema.safeParse(
-        JSON.parse(output.replace(/^```json\s*|\s*```$/g, "")),
+        JSON.parse(
+          first >= 0 && last > first ? cleaned.slice(first, last + 1) : cleaned,
+        ),
       );
     } catch {
       parsed = schema.safeParse(undefined);
     }
     if (parsed.success) return parsed.data;
+    if (i === 2) break;
     output = await askAi(
       role,
       "Bạn chỉ trả JSON hợp lệ theo schema yêu cầu.",

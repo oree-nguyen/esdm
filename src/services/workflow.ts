@@ -85,6 +85,35 @@ const reviewerSchema = z.object({
     }),
   ),
 });
+const fallbackReport = (input: ChildInput) => `**BÁO CÁO CAN THIỆP**
+
+## I. THÔNG TIN HÀNH CHÍNH
+- **Họ và tên trẻ:** ${input.childName}
+- **Ngày viết báo cáo:** ${input.reportDate}
+- **Người thực hiện can thiệp:** ${input.interventionPeople}
+- **Nguồn dữ liệu:** Tệp đánh giá do người dùng đính kèm.
+
+## II. HỆ THỐNG MÃ DỮ LIỆU VÀ QUY TẮC CHUNG
+- **I (Độc lập):** Trẻ thực hiện đúng hoàn toàn không cần hỗ trợ.
+- **G (Gợi ý):** Trẻ thực hiện sau gợi ý bằng lời hoặc cử chỉ.
+- **M (Làm mẫu):** Trẻ thực hiện sau khi người lớn làm mẫu.
+- **H (Hỗ trợ thể chất):** Trẻ thực hiện khi có hỗ trợ một phần.
+- **F (Chưa đạt):** Trẻ chưa thực hiện hoặc thực hiện sai.
+
+## III. CHỨC NĂNG HIỆN TẠI THEO TỪNG LĨNH VỰC
+- Dữ liệu từ tệp đã được tiếp nhận. Cần rà soát nội dung chi tiết trước khi xác định mức kỹ năng.
+
+## IV. MỤC TIÊU CỤ THỂ
+- Chưa tự tạo mục tiêu vì phản hồi AI không đúng định dạng để đối chiếu dữ liệu an toàn.
+
+## V. HOẠT ĐỘNG CAN THIỆP
+- Chờ rà soát dữ liệu nguồn trước khi lập hoạt động.
+
+## VI. CÁCH GHI DỮ LIỆU VÀ ĐÁNH GIÁ TIẾN ĐỘ
+- Ghi nhận trực tiếp từng cơ hội thực hiện; không tự tạo số liệu nền.
+
+## VII. KHUYẾN NGHỊ PHỐI HỢP GIA ĐÌNH VÀ NHÀ TRƯỜNG
+- Trao đổi lại sau khi hoàn tất rà soát dữ liệu đánh giá.`;
 export async function runWorkflow(
   input: ChildInput,
   settings: Settings,
@@ -112,14 +141,26 @@ export async function runWorkflow(
     )
       throw error;
     trace("File không được provider hỗ trợ, chuyển sang nội dung văn bản");
-    analysis = await askJson<Analysis>(
-      "analyzer",
-      ANALYZER_PROMPT,
-      input.sourceData,
-      analysisSchema,
-      settings,
-      signal,
-    );
+    try {
+      analysis = await askJson<Analysis>(
+        "analyzer",
+        ANALYZER_PROMPT,
+        input.sourceData,
+        analysisSchema,
+        settings,
+        signal,
+      );
+    } catch (fallbackError) {
+      if (
+        fallbackError instanceof DOMException &&
+        fallbackError.name === "AbortError"
+      )
+        throw fallbackError;
+      trace(
+        "Không thể chuẩn hóa JSON; đã tạo bản báo cáo dự phòng để tiếp tục kiểm tra",
+      );
+      return { report: fallbackReport(input), goals: [], issues: [] };
+    }
   }
   trace("Đã chọn mục tiêu can thiệp");
   const goalsResult = await askJson(
