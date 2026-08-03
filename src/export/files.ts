@@ -1,0 +1,5 @@
+import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
+const slug=(v:string)=>v.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+export function downloadMarkdown(report:string,name:string,date:string){download(new Blob([report],{type:'text/markdown;charset=utf-8'}),`${slug(name)}-${date}.md`)}
+export async function downloadDocx(report:string,name:string,date:string){const paragraphs=report.split('\n').filter(Boolean).map(line=>line.startsWith('## ') ? new Paragraph({heading:HeadingLevel.HEADING_2,children:[new TextRun({text:line.slice(3).toUpperCase(),bold:true})]}) : line.startsWith('### ') ? new Paragraph({heading:HeadingLevel.HEADING_3,text:line.slice(4)}) : new Paragraph({text:line.replace(/^[-*]\s*/,'● ')})); const blob=await Packer.toBlob(new Document({sections:[{properties:{},children:paragraphs}]}));download(blob,`${slug(name)}-${date}.docx`)}
+function download(blob:Blob,filename:string){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url)}

@@ -1,0 +1,6 @@
+export const ANALYZER_PROMPT = `Bạn phân tích dữ liệu đánh giá trẻ. Chỉ dùng dữ liệu được cung cấp, không suy diễn hay tạo baseline. Trả JSON hợp lệ gồm administrative, domains (skills có category strength|emerging|priority|observe và evidence), conflicts, missingData, goalCandidates.`;
+export const GOALS_PROMPT = `Chọn tối đa 5 mục tiêu từ nhóm emerging hoặc priority. Mỗi mục tiêu một hành vi đích quan sát/đếm được, đủ duration, context, opportunityCondition, maxSupport, masteryCriterion, contextsCount, peopleCount, consecutiveSessions. Trả JSON {selectedGoals,notSelected}.`;
+export const WRITER_PROMPT = `Viết báo cáo tiếng Việt dễ hiểu. Chỉ dùng JSON đã cho. Dùng heading ## I. ... và ### cho lĩnh vực/mục tiêu; mỗi mục tiêu đúng hai hoạt động (dạy trực tiếp và hỗ trợ), mô tả đủ chuẩn bị, bắt đầu, cơ hội, hỗ trợ, khen, lặp lại, giảm hỗ trợ, kết thúc, khái quát hóa, ghi dữ liệu.`;
+export const REVIEWER_PROMPT = `Đối chiếu báo cáo với dữ liệu và mục tiêu. Trả JSON {issues:[{id,title,passed,severity,message,section,suggestedFix}]}. Chỉ nêu lỗi thực tế.`;
+export const FIXER_PROMPT = `Chỉ sửa các lỗi trong danh sách, không thay đổi dữ liệu đúng hoặc tạo dữ liệu mới. Trả toàn bộ báo cáo Markdown đã sửa.`;
+export const JSON_FIX_PROMPT = `Chuyển nội dung sau thành JSON hợp lệ đúng schema, không thêm thông tin: `;
