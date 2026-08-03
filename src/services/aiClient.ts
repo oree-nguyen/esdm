@@ -111,7 +111,7 @@ export async function askJson<T>(
         JSON.parse(output.replace(/^```json\s*|\s*```$/g, "")),
       );
     } catch {
-      parsed = { success: false, error: new z.ZodError([]) };
+      parsed = schema.safeParse(undefined);
     }
     if (parsed.success) return parsed.data;
     output = await askAi(
