@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { askAi, askJson } from "./aiClient";
+import { AiError, askAi, askJson } from "./aiClient";
 import {
   ANALYZER_PROMPT,
   FIXER_PROMPT,
@@ -93,15 +93,34 @@ export async function runWorkflow(
   attachment?: FileAttachment,
 ) {
   trace("Đã phân tích dữ liệu nguồn");
-  const analysis = await askJson<Analysis>(
-    "analyzer",
-    ANALYZER_PROMPT,
-    input.sourceData,
-    analysisSchema,
-    settings,
-    signal,
-    attachment,
-  );
+  let analysis: Analysis;
+  try {
+    analysis = await askJson<Analysis>(
+      "analyzer",
+      ANALYZER_PROMPT,
+      input.sourceData,
+      analysisSchema,
+      settings,
+      signal,
+      attachment,
+    );
+  } catch (error) {
+    if (
+      !attachment ||
+      (error instanceof DOMException && error.name === "AbortError") ||
+      !(error instanceof AiError)
+    )
+      throw error;
+    trace("File không được provider hỗ trợ, chuyển sang nội dung văn bản");
+    analysis = await askJson<Analysis>(
+      "analyzer",
+      ANALYZER_PROMPT,
+      input.sourceData,
+      analysisSchema,
+      settings,
+      signal,
+    );
+  }
   trace("Đã chọn mục tiêu can thiệp");
   const goalsResult = await askJson(
     "analyzer",
