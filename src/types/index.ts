@@ -91,3 +91,8 @@ export interface Settings {
   endpoint: string;
   testMode: boolean;
 }
+export interface FileAttachment {
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+}

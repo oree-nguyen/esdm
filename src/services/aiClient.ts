@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MODEL_CONFIG, TEST_MODEL } from "../config/models";
-import type { ModelRole, Settings } from "../types";
+import type { FileAttachment, ModelRole, Settings } from "../types";
 export class AiError extends Error {
   constructor(
     public kind: string,
@@ -23,6 +23,7 @@ export async function askAi(
   user: string,
   settings: Settings,
   signal: AbortSignal,
+  attachment?: FileAttachment,
 ): Promise<string> {
   if (!settings.apiKey && settings.mode === "direct")
     throw new AiError(
@@ -35,6 +36,18 @@ export async function askAi(
       : `${settings.endpoint.replace(/\/$/, "")}/chat/completions`;
   for (let attempt = 0; attempt < 3; attempt++)
     try {
+      const userContent = attachment
+        ? [
+            { type: "text", text: user },
+            {
+              type: "file",
+              file: {
+                filename: attachment.name,
+                file_data: attachment.dataUrl,
+              },
+            },
+          ]
+        : user;
       const response = await fetch(url, {
         method: "POST",
         signal,
@@ -48,7 +61,7 @@ export async function askAi(
           model: settings.testMode ? TEST_MODEL : MODEL_CONFIG[role],
           messages: [
             { role: "system", content: system },
-            { role: "user", content: user },
+            { role: "user", content: userContent },
           ],
           temperature: role === "writer" ? 0.45 : 0.15,
           max_tokens: role === "writer" ? 6000 : 3500,
@@ -88,8 +101,9 @@ export async function askJson<T>(
   schema: z.ZodType<T>,
   settings: Settings,
   signal: AbortSignal,
+  attachment?: FileAttachment,
 ): Promise<T> {
-  let output = await askAi(role, system, user, settings, signal);
+  let output = await askAi(role, system, user, settings, signal, attachment);
   for (let i = 0; i < 2; i++) {
     const parsed = schema.safeParse(
       JSON.parse(output.replace(/^```json\s*|\s*```$/g, "")),

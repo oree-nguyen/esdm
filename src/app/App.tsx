@@ -4,7 +4,12 @@ import { APP_NAME, DEFAULT_SETTINGS, MAX_SOURCE_CHARS } from "../config/app";
 import { downloadDocx, downloadMarkdown } from "../export/files";
 import { runWorkflow } from "../services/workflow";
 import { clearStorage, loadDraft, saveDraft } from "../storage/draftStorage";
-import type { ChatMessage, ChildInput, Settings } from "../types";
+import type {
+  ChatMessage,
+  ChildInput,
+  FileAttachment,
+  Settings,
+} from "../types";
 import "../attachment.css";
 
 const today = () => new Date().toLocaleDateString("en-CA");
@@ -36,6 +41,7 @@ export function App() {
   );
   const [draft, setDraft] = useState("");
   const [attachedFile, setAttachedFile] = useState("");
+  const [attachment, setAttachment] = useState<FileAttachment>();
   const [fileError, setFileError] = useState("");
   const [report, setReport] = useState(saved.report ?? "");
   const [settings, setSettings] = useState<Settings>(
@@ -76,6 +82,12 @@ export function App() {
       return;
     }
     try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("Không thể đọc tệp."));
+        reader.readAsDataURL(file);
+      });
       const result = await mammoth.extractRawText({
         arrayBuffer: await file.arrayBuffer(),
       });
@@ -83,6 +95,11 @@ export function App() {
       if (!text) throw new Error("Tệp DOCX không có văn bản để đọc.");
       setDraft(text);
       setAttachedFile(file.name);
+      setAttachment({
+        name: file.name,
+        mimeType: file.type || "application/octet-stream",
+        dataUrl,
+      });
     } catch (error) {
       setFileError(
         error instanceof Error ? error.message : "Không thể đọc tệp DOCX.",
@@ -95,10 +112,16 @@ export function App() {
     if (!text || working) return;
     setMessages((m) => [
       ...m,
-      { id: crypto.randomUUID(), role: "user", text, createdAt: Date.now() },
+      {
+        id: crypto.randomUUID(),
+        role: "user",
+        text: attachedFile ? `📎 ${attachedFile}` : text,
+        createdAt: Date.now(),
+      },
     ]);
     setDraft("");
     setAttachedFile("");
+    setAttachment(undefined);
     const fields = extract(text);
     const missing = [
       !fields.childName && "tên trẻ",
@@ -134,6 +157,7 @@ export function App() {
         settings,
         controller.current.signal,
         (s) => setTrace((t) => [...t, s]),
+        attachment,
       );
       setReport(result.report);
       say(
@@ -255,7 +279,8 @@ export function App() {
                   setSettings({ ...settings, testMode: e.target.checked })
                 }
               />{" "}
-              Cháº¿ Ä‘á»™ test (dÃ¹ng openai/gpt-oss-20b:free cho cáº£ 4 vai trÃ²)
+              Cháº¿ Ä‘á»™ test (dÃ¹ng openai/gpt-oss-20b:free cho cáº£ 4 vai
+              trÃ²)
             </label>
             <button
               onClick={() => downloadMarkdown(report, "bao-cao", today())}
@@ -322,7 +347,13 @@ export function App() {
               />
             </label>
             <label>
-              <input type="checkbox" checked={settings.testMode} onChange={(e) => setSettings({ ...settings, testMode: e.target.checked })} />{" "}
+              <input
+                type="checkbox"
+                checked={settings.testMode}
+                onChange={(e) =>
+                  setSettings({ ...settings, testMode: e.target.checked })
+                }
+              />{" "}
               Test mode: use openai/gpt-oss-20b:free for all roles
             </label>
             <button
