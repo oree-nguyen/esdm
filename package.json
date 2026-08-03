@@ -1,6 +1,27 @@
 {
-  "name": "bao-cao-can-thiep", "private": true, "version": "0.1.0", "type": "module",
-  "scripts": { "dev": "vite", "build": "tsc -b && vite build", "test": "vitest run", "check": "tsc -b" },
-  "dependencies": { "@vitejs/plugin-react": "latest", "docx": "latest", "react": "latest", "react-dom": "latest", "zod": "latest" },
-  "devDependencies": { "@types/react": "latest", "@types/react-dom": "latest", "typescript": "latest", "vite": "latest", "vitest": "latest" }
+  "name": "bao-cao-can-thiep",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "check": "tsc -b"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "docx": "latest",
+    "mammoth": "^1.12.0",
+    "react": "latest",
+    "react-dom": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "vitest": "latest"
+  }
 }
