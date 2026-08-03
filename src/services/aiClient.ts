@@ -68,6 +68,7 @@ export async function askAi(
           ],
           temperature: role === "writer" ? 0.45 : 0.15,
           ...(jsonOnly ? { response_format: { type: "json_object" } } : {}),
+          ...(jsonOnly ? { reasoning: { effort: "none", exclude: true } } : {}),
         }),
       });
       if (!response.ok) {
@@ -76,9 +77,14 @@ export async function askAi(
         throw new AiError("api", messageOf(response.status));
       }
       const json = (await response.json()) as {
-        choices?: { message?: { content?: string } }[];
+        choices?: {
+          message?: { content?: string | { type?: string; text?: string }[] };
+        }[];
       };
-      const text = json.choices?.[0]?.message?.content;
+      const content = json.choices?.[0]?.message?.content;
+      const text = Array.isArray(content)
+        ? content.map((part) => part.text ?? "").join("")
+        : content;
       if (!text)
         throw new AiError(
           "format",
