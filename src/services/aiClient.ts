@@ -68,7 +68,6 @@ export async function askAi(
           ],
           temperature: role === "writer" ? 0.45 : 0.15,
           ...(jsonOnly ? { response_format: { type: "json_object" } } : {}),
-          ...(jsonOnly ? { reasoning: { effort: "none", exclude: true } } : {}),
         }),
       });
       if (!response.ok) {
