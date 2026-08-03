@@ -40,6 +40,7 @@ export function App() {
     ],
   );
   const [draft, setDraft] = useState("");
+  const [extractedText, setExtractedText] = useState("");
   const [attachedFile, setAttachedFile] = useState("");
   const [attachment, setAttachment] = useState<FileAttachment>();
   const [fileError, setFileError] = useState("");
@@ -93,7 +94,7 @@ export function App() {
       });
       const text = result.value.trim();
       if (!text) throw new Error("Tệp DOCX không có văn bản để đọc.");
-      setDraft(text);
+      setExtractedText(text);
       setAttachedFile(file.name);
       setAttachment({
         name: file.name,
@@ -108,7 +109,7 @@ export function App() {
   }
 
   async function submit() {
-    const text = draft.trim();
+    const text = (draft.trim() || extractedText).trim();
     if (!text || working) return;
     setMessages((m) => [
       ...m,
@@ -120,6 +121,7 @@ export function App() {
       },
     ]);
     setDraft("");
+    setExtractedText("");
     setAttachedFile("");
     setAttachment(undefined);
     const fields = extract(text);
@@ -255,7 +257,7 @@ export function App() {
         </div>
         <button
           className="send"
-          disabled={working || !draft.trim()}
+          disabled={working || (!draft.trim() && !attachment)}
           onClick={submit}
         >
           Gửi
