@@ -125,12 +125,14 @@ export function App() {
     setAttachedFile("");
     setAttachment(undefined);
     const fields = extract(text);
+    const fileChildName = attachedFile?.replace(/\.docx$/i, "") || "Trẻ";
     const missing = [
       !fields.childName && "tên trẻ",
       !fields.birthDate && "ngày sinh",
       !fields.evaluator && "người đánh giá",
       !fields.sourceData && "dữ liệu nguồn",
     ].filter(Boolean);
+    if (attachment) missing.length = 0;
     if (missing.length || text.length < 40) {
       say(
         `Để bắt đầu, vui lòng bổ sung: ${missing.length ? missing.join(", ") : "dữ liệu nguồn chi tiết hơn"}.`,
@@ -142,7 +144,7 @@ export function App() {
       return;
     }
     const input: ChildInput = {
-      childName: fields.childName!,
+      childName: fields.childName || fileChildName,
       birthDate: fields.birthDate,
       evaluator: fields.evaluator,
       sourceData: fields.sourceData!,
