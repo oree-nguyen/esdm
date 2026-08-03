@@ -96,3 +96,17 @@ export interface FileAttachment {
   mimeType: string;
   dataUrl: string;
 }
+export interface StepEvent {
+  id: string;
+  text: string;
+  phase:
+    | "analyzer"
+    | "goalSelection"
+    | "ruleEngineAnalysis"
+    | "writer"
+    | "reviewer"
+    | "ruleEngineReport"
+    | "fixer"
+    | "done";
+  status: "active" | "done";
+}

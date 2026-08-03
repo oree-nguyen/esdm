@@ -3,12 +3,14 @@ import mammoth from "mammoth";
 import { APP_NAME, DEFAULT_SETTINGS, MAX_SOURCE_CHARS } from "../config/app";
 import { downloadDocx, downloadMarkdown } from "../export/files";
 import { runWorkflow } from "../services/workflow";
+import { StepTraceStatus } from "../components/chat/StepTraceStatus";
 import { clearStorage, loadDraft, saveDraft } from "../storage/draftStorage";
 import type {
   ChatMessage,
   ChildInput,
   FileAttachment,
   Settings,
+  StepEvent,
 } from "../types";
 import "../attachment.css";
 
@@ -51,7 +53,7 @@ export function App() {
   const [open, setOpen] = useState(false),
     [settingsOpen, setSettingsOpen] = useState(false),
     [working, setWorking] = useState(false);
-  const [trace, setTrace] = useState<string[]>([]),
+  const [trace, setTrace] = useState<StepEvent[]>([]),
     [elapsed, setElapsed] = useState(0);
   const controller = useRef<AbortController | null>(null);
   useEffect(
@@ -161,7 +163,19 @@ export function App() {
         input,
         settings,
         controller.current.signal,
-        (s) => setTrace((t) => [...t, s]),
+        (event) =>
+          setTrace((events) =>
+            event.status === "done"
+              ? events.map((item) => (item.id === event.id ? event : item))
+              : [
+                  ...events.map((item) =>
+                    item.status === "active"
+                      ? { ...item, status: "done" as const }
+                      : item,
+                  ),
+                  event,
+                ],
+          ),
         attachment,
       );
       setReport(result.report);
@@ -222,7 +236,13 @@ export function App() {
             )}
           </article>
         ))}
-        {working && (
+        <StepTraceStatus
+          events={trace}
+          working={working}
+          elapsed={elapsed}
+          onCancel={() => controller.current?.abort()}
+        />
+        {false && working && (
           <article className="status">
             <span className="dot" /> Đang làm việc…{" "}
             <button onClick={() => controller.current?.abort()}>Hủy</button>
@@ -232,7 +252,7 @@ export function App() {
           <details className="status">
             <summary>Đã xử lý trong {elapsed} giây</summary>
             {trace.map((x) => (
-              <div key={x}>✓ {x}</div>
+              <div key={x.id}>✓ {x.text}</div>
             ))}
           </details>
         )}

@@ -15,6 +15,7 @@ import type {
   GoalDraft,
   RuleCheckResult,
   Settings,
+  StepEvent,
 } from "../types";
 const analysisSchema = z.object({
   administrative: z.object({
@@ -118,10 +119,33 @@ export async function runWorkflow(
   input: ChildInput,
   settings: Settings,
   signal: AbortSignal,
-  trace: (s: string) => void,
+  onStepEvent: (event: StepEvent) => void,
   attachment?: FileAttachment,
 ) {
-  trace("Đã phân tích dữ liệu nguồn");
+  let sequence = 0;
+  let active: StepEvent | undefined;
+  let filler: ReturnType<typeof setTimeout> | undefined;
+  const finishActive = () => {
+    if (active) onStepEvent({ ...active, status: "done" });
+    active = undefined;
+    if (filler) clearTimeout(filler);
+    filler = undefined;
+  };
+  const step = (phase: StepEvent["phase"], text: string) => {
+    finishActive();
+    active = { id: `evt-${++sequence}`, text, phase, status: "active" };
+    onStepEvent(active);
+    filler = setTimeout(() => {
+      if (active)
+        onStepEvent({
+          id: `evt-${++sequence}`,
+          text: "Vẫn đang xử lý…",
+          phase: active.phase,
+          status: "active",
+        });
+    }, 3000);
+  };
+  step("analyzer", "Đang đọc dữ liệu đánh giá của trẻ");
   let analysis: Analysis;
   try {
     analysis = await askJson<Analysis>(
@@ -140,7 +164,7 @@ export async function runWorkflow(
       !(error instanceof AiError)
     )
       throw error;
-    trace("File không được provider hỗ trợ, chuyển sang nội dung văn bản");
+    step("analyzer", "Đang đọc nội dung văn bản của tệp");
     try {
       analysis = await askJson<Analysis>(
         "analyzer",
@@ -156,13 +180,11 @@ export async function runWorkflow(
         fallbackError.name === "AbortError"
       )
         throw fallbackError;
-      trace(
-        "Không thể chuẩn hóa JSON; đã tạo bản báo cáo dự phòng để tiếp tục kiểm tra",
-      );
+      step("analyzer", "Không thể chuẩn hóa dữ liệu phản hồi");
       throw fallbackError;
     }
   }
-  trace("Đã chọn mục tiêu can thiệp");
+  step("ruleEngineAnalysis", "Đang kiểm tra dữ liệu theo quy tắc");
   const missingAdministrative = analysis.administrative.missingFields.filter(
     (field) => field === "childName" || field === "birthDate",
   );
@@ -180,6 +202,7 @@ export async function runWorkflow(
     birthDate: analysis.administrative.birthDate || input.birthDate,
     evaluator: analysis.administrative.evaluator || input.evaluator,
   };
+  step("goalSelection", "Đang chọn mục tiêu can thiệp phù hợp");
   const goalsResult = await askJson(
     "analyzer",
     GOALS_PROMPT,
@@ -200,7 +223,7 @@ export async function runWorkflow(
         .map((x) => x.message)
         .join(" "),
     );
-  trace("Đã viết báo cáo");
+  step("writer", "Đang viết báo cáo chức năng hiện tại");
   let report = await askAi(
     "writer",
     WRITER_PROMPT,
@@ -210,7 +233,7 @@ export async function runWorkflow(
   );
   let issues: RuleCheckResult[] = [];
   for (let round = 0; round < 3; round++) {
-    trace(`Đã kiểm tra 20 tiêu chí${round ? ` (vòng ${round + 1})` : ""}`);
+    step("reviewer", "Đang kiểm tra báo cáo theo 20 tiêu chí");
     const [review, rules] = await Promise.all([
       askJson(
         "reviewer",
@@ -228,7 +251,7 @@ export async function runWorkflow(
     ].filter((x) => !x.passed);
     if (!issues.length) break;
     if (round === 2) break;
-    trace(`Đã sửa lỗi (vòng ${round + 1}/3)`);
+    step("fixer", "Đang sửa các lỗi được phát hiện");
     report = await askAi(
       "fixer",
       FIXER_PROMPT,
@@ -237,5 +260,7 @@ export async function runWorkflow(
       signal,
     );
   }
+  step("done", "Đã xử lý xong");
+  finishActive();
   return { report, goals, issues, childName: input.childName };
 }
