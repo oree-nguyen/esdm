@@ -105,9 +105,14 @@ export async function askJson<T>(
 ): Promise<T> {
   let output = await askAi(role, system, user, settings, signal, attachment);
   for (let i = 0; i < 2; i++) {
-    const parsed = schema.safeParse(
-      JSON.parse(output.replace(/^```json\s*|\s*```$/g, "")),
-    );
+    let parsed: ReturnType<typeof schema.safeParse>;
+    try {
+      parsed = schema.safeParse(
+        JSON.parse(output.replace(/^```json\s*|\s*```$/g, "")),
+      );
+    } catch {
+      parsed = { success: false, error: new z.ZodError([]) };
+    }
     if (parsed.success) return parsed.data;
     output = await askAi(
       role,
