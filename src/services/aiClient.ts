@@ -19,6 +19,12 @@ const messageOf = (status: number) =>
         : status === 404
           ? "Mô hình không khả dụng."
           : "Không thể gọi dịch vụ AI.";
+const maxTokensFor = (role: ModelRole) =>
+  role === "analyzer"
+    ? 10000
+    : role === "writer" || role === "fixer"
+      ? 9000
+      : 6000;
 export async function askAi(
   role: ModelRole,
   system: string,
@@ -66,7 +72,7 @@ export async function askAi(
             { role: "user", content: userContent },
           ],
           temperature: role === "writer" ? 0.45 : 0.15,
-          max_tokens: role === "writer" ? 6000 : 3500,
+          max_tokens: maxTokensFor(role),
         }),
       });
       if (!response.ok) {
