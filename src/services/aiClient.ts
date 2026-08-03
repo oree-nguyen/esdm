@@ -9,6 +9,11 @@ export class AiError extends Error {
     super(message);
   }
 }
+export type AiContent = string | { type?: string; text?: string }[] | undefined;
+export const normalizeContent = (content: AiContent): string | undefined =>
+  Array.isArray(content)
+    ? content.map((part) => part.text ?? "").join("")
+    : content;
 const messageOf = (status: number) =>
   status === 401
     ? "Khóa truy cập không hợp lệ."
@@ -76,14 +81,10 @@ export async function askAi(
         throw new AiError("api", messageOf(response.status));
       }
       const json = (await response.json()) as {
-        choices?: {
-          message?: { content?: string | { type?: string; text?: string }[] };
-        }[];
+        choices?: { message?: { content?: AiContent } }[];
       };
       const content = json.choices?.[0]?.message?.content;
-      const text = Array.isArray(content)
-        ? content.map((part) => part.text ?? "").join("")
-        : content;
+      const text = normalizeContent(content);
       if (!text)
         throw new AiError(
           "format",
