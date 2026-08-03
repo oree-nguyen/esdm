@@ -20,6 +20,7 @@
   "devDependencies": {
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "prettier": "^3.9.6",
     "typescript": "latest",
     "vite": "latest",
     "vitest": "latest"
