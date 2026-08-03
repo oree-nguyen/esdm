@@ -159,7 +159,7 @@ export async function runWorkflow(
       trace(
         "Không thể chuẩn hóa JSON; đã tạo bản báo cáo dự phòng để tiếp tục kiểm tra",
       );
-      return { report: fallbackReport(input), goals: [], issues: [] };
+      throw fallbackError;
     }
   }
   trace("Đã chọn mục tiêu can thiệp");

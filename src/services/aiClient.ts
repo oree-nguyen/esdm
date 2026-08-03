@@ -12,11 +12,13 @@ export class AiError extends Error {
 const messageOf = (status: number) =>
   status === 401
     ? "Khóa truy cập không hợp lệ."
-    : status === 429
-      ? "Đã chạm giới hạn yêu cầu, vui lòng thử lại."
-      : status === 404
-        ? "Mô hình không khả dụng."
-        : "Không thể gọi dịch vụ AI.";
+    : status === 402 || status === 403
+      ? "Tài khoản OpenRouter không đủ tín dụng hoặc không được phép dùng model này. Hãy bật Test mode hoặc nạp tín dụng."
+      : status === 429
+        ? "Đã chạm giới hạn yêu cầu, vui lòng thử lại."
+        : status === 404
+          ? "Mô hình không khả dụng."
+          : "Không thể gọi dịch vụ AI.";
 export async function askAi(
   role: ModelRole,
   system: string,
