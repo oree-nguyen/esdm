@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MODEL_CONFIG, TEST_MODEL } from "../config/models";
+import { resolveModel } from "../config/models";
 import type { FileAttachment, ModelRole, Settings } from "../types";
 export class AiError extends Error {
   constructor(
@@ -26,6 +26,7 @@ export async function askAi(
   settings: Settings,
   signal: AbortSignal,
   attachment?: FileAttachment,
+  jsonOnly = false,
 ): Promise<string> {
   if (!settings.apiKey && settings.mode === "direct")
     throw new AiError(
@@ -60,12 +61,13 @@ export async function askAi(
             : {}),
         },
         body: JSON.stringify({
-          model: settings.testMode ? TEST_MODEL : MODEL_CONFIG[role],
+          model: resolveModel(role, settings.testMode),
           messages: [
             { role: "system", content: system },
             { role: "user", content: userContent },
           ],
           temperature: role === "writer" ? 0.45 : 0.15,
+          ...(jsonOnly ? { response_format: { type: "json_object" } } : {}),
         }),
       });
       if (!response.ok) {
@@ -104,7 +106,15 @@ export async function askJson<T>(
   signal: AbortSignal,
   attachment?: FileAttachment,
 ): Promise<T> {
-  let output = await askAi(role, system, user, settings, signal, attachment);
+  let output = await askAi(
+    role,
+    system,
+    user,
+    settings,
+    signal,
+    attachment,
+    true,
+  );
   for (let i = 0; i < 3; i++) {
     let parsed: ReturnType<typeof schema.safeParse>;
     try {
@@ -127,6 +137,8 @@ export async function askJson<T>(
       `Sửa JSON này: ${output}`,
       settings,
       signal,
+      undefined,
+      true,
     );
   }
   throw new AiError(

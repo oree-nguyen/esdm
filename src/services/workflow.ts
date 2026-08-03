@@ -163,6 +163,23 @@ export async function runWorkflow(
     }
   }
   trace("Đã chọn mục tiêu can thiệp");
+  const missingAdministrative = analysis.administrative.missingFields.filter(
+    (field) => field === "childName" || field === "birthDate",
+  );
+  if (missingAdministrative.length) {
+    const labels = missingAdministrative.map((field) =>
+      field === "childName" ? "tên trẻ" : "ngày sinh",
+    );
+    throw new Error(
+      `Dữ liệu bạn cung cấp chưa có ${labels.join(" và ")}. Vui lòng bổ sung rồi gửi lại.`,
+    );
+  }
+  input = {
+    ...input,
+    childName: analysis.administrative.childName,
+    birthDate: analysis.administrative.birthDate || input.birthDate,
+    evaluator: analysis.administrative.evaluator || input.evaluator,
+  };
   const goalsResult = await askJson(
     "analyzer",
     GOALS_PROMPT,
@@ -220,5 +237,5 @@ export async function runWorkflow(
       signal,
     );
   }
-  return { report, goals, issues };
+  return { report, goals, issues, childName: input.childName };
 }

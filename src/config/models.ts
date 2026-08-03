@@ -6,3 +6,5 @@ export const MODEL_CONFIG: Record<ModelRole, string> = {
   fixer: "deepseek/deepseek-v3.2",
 };
 export const TEST_MODEL = "openai/gpt-oss-20b:free";
+export const resolveModel = (role: ModelRole, testMode: boolean) =>
+  testMode ? TEST_MODEL : MODEL_CONFIG[role];

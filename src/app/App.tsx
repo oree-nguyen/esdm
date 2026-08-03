@@ -124,7 +124,7 @@ export function App() {
     setExtractedText("");
     setAttachedFile("");
     setAttachment(undefined);
-    const fields = extract(text);
+    const fields: Partial<ChildInput> = {};
     const fileChildName = attachedFile?.replace(/\.docx$/i, "") || "Trẻ";
     const missing = [
       !fields.childName && "tên trẻ",
@@ -132,6 +132,7 @@ export function App() {
       !fields.evaluator && "người đánh giá",
       !fields.sourceData && "dữ liệu nguồn",
     ].filter(Boolean);
+    missing.length = 0;
     if (attachment) missing.length = 0;
     if (missing.length || text.length < 40) {
       say(
@@ -144,10 +145,10 @@ export function App() {
       return;
     }
     const input: ChildInput = {
-      childName: fields.childName || fileChildName,
+      childName: "",
       birthDate: fields.birthDate,
       evaluator: fields.evaluator,
-      sourceData: fields.sourceData!,
+      sourceData: text,
       reportDate: today(),
       interventionPeople: "Giáo viên và gia đình",
     };
@@ -165,7 +166,7 @@ export function App() {
       );
       setReport(result.report);
       say(
-        `Đã tạo báo cáo cho ${input.childName} với ${result.goals.length} mục tiêu.${result.issues.length ? ` Còn ${result.issues.length} điểm cần xem lại.` : " Báo cáo đã qua kiểm tra."}`,
+        `Đã tạo báo cáo cho ${result.childName} với ${result.goals.length} mục tiêu.${result.issues.length ? ` Còn ${result.issues.length} điểm cần xem lại.` : " Báo cáo đã qua kiểm tra."}`,
         true,
       );
     } catch (error) {
