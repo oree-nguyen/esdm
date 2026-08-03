@@ -25,3 +25,24 @@
 .attach input {
   display: none;
 }
+
+footer {
+  align-items: flex-end;
+}
+
+footer .composer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+footer .composer textarea {
+  display: block;
+  width: 100%;
+  flex: none;
+}
+
+footer .send {
+  height: 44px;
+  min-height: 44px;
+  align-self: flex-end;
+}
