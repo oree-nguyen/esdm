@@ -1,0 +1,27 @@
+.attach {
+  width: 44px;
+  height: 44px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #d5dbea;
+  border-radius: 50%;
+  color: #27324a;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0;
+  line-height: 1;
+}
+
+.attach::after {
+  content: '+';
+  font-size: 28px;
+  font-weight: 300;
+}
+
+.attach:hover {
+  background: #f0f4ff;
+}
+
+.attach input {
+  display: none;
+}

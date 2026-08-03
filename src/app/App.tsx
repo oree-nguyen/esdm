@@ -5,6 +5,7 @@ import { downloadDocx, downloadMarkdown } from '../export/files';
 import { runWorkflow } from '../services/workflow';
 import { clearStorage, loadDraft, saveDraft } from '../storage/draftStorage';
 import type { ChatMessage, ChildInput, Settings } from '../types';
+import '../attachment.css';
 
 const today = () => new Date().toLocaleDateString('en-CA');
 const extract = (text: string): Partial<ChildInput> => ({
