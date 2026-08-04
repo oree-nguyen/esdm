@@ -13,6 +13,12 @@ describe('rule engine',()=>{
     const results=runRules('Nội dung báo cáo.',{...input,childName:'Nguyễn Trâm Anh',birthDate:''},analysis,[]);
     expect(results.find(x=>x.id===1)?.passed).toBe(true);
   });
+  it('keeps missing evidence as a recoverable warning instead of a pipeline-blocking error',()=>{
+    const sparse = { ...analysis, domains: [{ ...analysis.domains[0], skills: [{ ...analysis.domains[0].skills[0], evidence: '' }] }] };
+    const finding = runRules('', input, sparse, []).find(x=>x.id===4);
+    expect(finding?.passed).toBe(false);
+    expect(finding?.severity).toBe('warning');
+  });
   it('allows the fixed five individual plus two group goals',()=>expect(runRules('',input,analysis,Array(7).fill(goal)).find(x=>x.id===13)?.passed).toBe(true));
   it('rejects more than seven direct goals',()=>expect(runRules('',input,analysis,Array(8).fill(goal)).find(x=>x.id===13)?.passed).toBe(false));
   it('keeps a valid no-candidate topic without reporting missing goal fields',()=>{

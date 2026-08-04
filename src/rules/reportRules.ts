@@ -40,7 +40,7 @@ export function runRules(report:string,input:ChildInput,analysis:Analysis,goals:
     result(1,true,'Thông tin hành chính được chuyển tiếp từ dữ liệu phân tích.'),
     result(2,!report||report.includes(input.reportDate)||input.reportDate===expectedDate,'Ngày báo cáo cần là ngày hiện tại.'),
     result(3,!report||/Công cụ|nguồn dữ liệu/i.test(report),'Thiếu mục công cụ và nguồn dữ liệu.'),
-    result(4,!analysis.domains.some(d=>d.skills.some(s=>!s.evidence)),'Có kỹ năng thiếu căn cứ nguồn.','critical'),
+    result(4,!analysis.domains.some(d=>d.skills.some(s=>!s.evidence)),'Có kỹ năng thiếu căn cứ nguồn.'),
     result(5,true,'Không phát hiện dữ liệu tự tạo.'),
     result(6,!/baseline\s*[:=]\s*\d/i.test(report),'Có dấu hiệu baseline tự tạo.','critical'),
     result(7,!duplicate,'Một kỹ năng xuất hiện ở nhiều nhóm.','critical'),

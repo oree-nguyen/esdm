@@ -355,13 +355,12 @@ export async function runWorkflow(
     };
   });
   const pre = runRules("", input, analysis, goals);
-  if (pre.some((x) => !x.passed && x.severity === "critical"))
-    throw new Error(
-      pre
-        .filter((x) => !x.passed)
-        .map((x) => x.message)
-        .join(" "),
-    );
+  // Rule Engine findings are quality feedback for reviewer/fixer, not a
+  // reason to abort the pipeline before a report exists. In particular,
+  // missing evidence is recoverable from the source/report context and must
+  // never strand a session at goal selection.
+  if (import.meta.env.DEV && pre.some((x) => !x.passed))
+    console.debug("Pre-report rule findings (pipeline continues)", pre.filter((x) => !x.passed));
   checkpoint({ ...options.resume, lastCompletedStep: "goalSelection", analysisJson: analysis, analysisMarkdown, goalsJson: goals, goalsMarkdown, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
   step("writer", "Đang viết báo cáo chức năng hiện tại");
   let report = isCompleteReportMarkdown(options.resume?.reportMarkdown)
