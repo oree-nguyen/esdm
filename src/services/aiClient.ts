@@ -2,10 +2,6 @@ import { resolveModel } from "../config/models";
 import { JSON_FIX_PROMPT } from "../prompts/templates";
 import type { ModelRole, Settings } from "../types";
 
-export type JsonSchema = Record<string, unknown>;
-type ResponseFormat =
-  | { type: "json_object" }
-  | { type: "json_schema"; json_schema: { name: string; strict: true; schema: JsonSchema } };
 export class AiError extends Error {
   constructor(public kind: string, message: string, public status?: number) {
     super(message);
@@ -49,7 +45,6 @@ interface AiResponse { text: string; model: string; provider?: string }
 
 async function requestAi(
   role: ModelRole, system: string, user: string, settings: Settings, signal: AbortSignal,
-  responseFormat?: ResponseFormat,
 ): Promise<AiResponse> {
   if (!settings.apiKey && settings.mode === "direct")
     throw new AiError("key", "Hãy nhập khóa truy cập trong Cài đặt trước khi tạo báo cáo.");
@@ -68,7 +63,6 @@ async function requestAi(
           model,
           messages: [{ role: "system", content: system }, { role: "user", content: user }],
           temperature: role === "writer" ? 0.45 : 0.15,
-          ...(responseFormat ? { response_format: responseFormat } : {}),
         }),
       });
       if (!response.ok) {
@@ -99,34 +93,22 @@ export async function askAi(role: ModelRole, system: string, user: string, setti
   return (await requestAi(role, system, user, settings, signal)).text;
 }
 
-export async function askJson<T>(
-  role: ModelRole, system: string, user: string, normalize: (value: unknown) => T | undefined, jsonSchema: JsonSchema,
-  schemaName: string, settings: Settings, signal: AbortSignal,
+export async function askStructured<T>(
+  role: ModelRole, system: string, user: string, parse: (text: string) => T | undefined,
+  startMarker: string, expectedFormat: string, settings: Settings, signal: AbortSignal,
 ): Promise<T> {
-  let response: AiResponse;
-  try {
-    response = await requestAi(role, system, user, settings, signal, {
-      type: "json_schema", json_schema: { name: schemaName, strict: true, schema: jsonSchema },
-    });
-  } catch (error) {
-    if (!(error instanceof AiError) || error.status !== 400) throw error;
-    if (import.meta.env.DEV) console.debug("Structured output unsupported; falling back to json_object", { role, model: resolveModel(role, settings.testMode) });
-    response = await requestAi(role, system, user, settings, signal, { type: "json_object" });
-  }
+  let response = await requestAi(role, system, user, settings, signal);
   for (let repair = 0; repair < 2; repair++) {
-    try {
-      const candidate = extractJsonObject(response.text.replace(/^```(?:json)?\s*|\s*```$/g, ""));
-      const parsed = normalize(candidate ? JSON.parse(candidate) : undefined);
-      if (parsed !== undefined) return parsed;
-    } catch { /* repaired once below */ }
+    const start = response.text.indexOf(startMarker);
+    const parsed = start >= 0 ? parse(response.text.slice(start)) : undefined;
+    if (parsed !== undefined) return parsed;
     if (import.meta.env.DEV)
       console.debug("Invalid JSON response", { role, model: response.model, provider: response.provider, content: response.text });
     if (repair === 1) break;
     response = await requestAi(
-      role, JSON_FIX_PROMPT,
-      `Phản hồi cần sửa:\n${response.text}\n\nEXPECTED_SCHEMA:\n${JSON.stringify(jsonSchema)}`,
-      settings, signal, { type: "json_object" },
+      role, JSON_FIX_PROMPT, `Phản hồi cần sửa:\n${response.text}\n\nEXPECTED_FORMAT:\n${expectedFormat}`,
+      settings, signal,
     );
   }
-  throw new AiError("format", "Phản hồi JSON không hợp lệ sau khi đã thử sửa một lần.");
+  throw new AiError("format", "Phản hồi Markdown không đúng cấu trúc sau khi đã thử sửa một lần.");
 }
