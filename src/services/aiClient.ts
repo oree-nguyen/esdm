@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { resolveModel } from "../config/models";
 import { JSON_FIX_PROMPT } from "../prompts/templates";
 import type { ModelRole, Settings } from "../types";
@@ -91,7 +90,7 @@ export async function askAi(role: ModelRole, system: string, user: string, setti
 }
 
 export async function askJson<T>(
-  role: ModelRole, system: string, user: string, schema: z.ZodType<T>, jsonSchema: JsonSchema,
+  role: ModelRole, system: string, user: string, normalize: (value: unknown) => T | undefined, jsonSchema: JsonSchema,
   schemaName: string, settings: Settings, signal: AbortSignal,
 ): Promise<T> {
   let response: AiResponse;
@@ -107,8 +106,8 @@ export async function askJson<T>(
   for (let repair = 0; repair < 2; repair++) {
     try {
       const candidate = extractJsonObject(response.text.replace(/^```(?:json)?\s*|\s*```$/g, ""));
-      const parsed = schema.safeParse(candidate ? JSON.parse(candidate) : undefined);
-      if (parsed.success) return parsed.data;
+      const parsed = normalize(candidate ? JSON.parse(candidate) : undefined);
+      if (parsed !== undefined) return parsed;
     } catch { /* repaired once below */ }
     if (import.meta.env.DEV)
       console.debug("Invalid JSON response", { role, model: response.model, provider: response.provider, content: response.text });

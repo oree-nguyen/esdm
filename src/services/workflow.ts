@@ -100,6 +100,27 @@ const reviewerJsonSchema: JsonSchema = object({
   score: integer, passedCount: integer, failedCount: integer,
   issues: { type: "array", items: object({ criterionId: integer, severity: { type: "string", enum: ["critical", "warning", "format"] }, section: string, problem: string, evidence: string, suggestedFix: string }, ["criterionId", "severity", "section", "problem", "evidence", "suggestedFix"]) },
 }, ["score", "passedCount", "failedCount", "issues"]);
+const record = (value: unknown): Record<string, unknown> | undefined => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+const list = (value: unknown): unknown[] | undefined => Array.isArray(value) ? value : undefined;
+const text = (value: unknown) => Array.isArray(value) ? value.filter(x => typeof x === "string").join(", ") : typeof value === "string" ? value : value == null ? "" : String(value);
+const category = (value: unknown): Analysis["domains"][number]["skills"][number]["category"] => {
+  const key=text(value).toLowerCase().trim();
+  if (["strength","strong","điểm mạnh","dat","đạt"].includes(key)) return "strength";
+  if (["emerging","developing","đang hình thành","partial","p"].includes(key)) return "emerging";
+  if (["priority","prioritized","ưu tiên","n"].includes(key)) return "priority";
+  return "observe";
+};
+const normalizeAnalysis = (value: unknown): Analysis | undefined => {
+  const root=record(value), rawDomains=list(root?.domains ?? root?.domain ?? root?.lĩnhVực);
+  if (!rawDomains?.length) return undefined;
+  const domains=rawDomains.map(item=>{const d=record(item) ?? {};const skills=list(d.skills ?? d.items ?? d.kỹNăng) ?? [];return {name:text(d.name ?? d.domain ?? d.lĩnhVực),skills:skills.map(skill=>{const s=record(skill) ?? {};return {skill:text(s.skill ?? s.name ?? s.title),category:category(s.category ?? s.group ?? s.status),evidence:text(s.evidence ?? s.sourceEvidence ?? s.source ?? s.bằngChứng),supportLevel:text(s.supportLevel ?? s.support),conflict:Boolean(s.conflict),missingData:Boolean(s.missingData)}})}}).filter(d=>d.name || d.skills.length);
+  if (!domains.length) return undefined;
+  const admin=record(root?.administrative ?? root?.admin) ?? {};
+  const refs=(value:unknown)=> (list(value) ?? []).map(x=>{const r=record(x) ?? {};return {domain:text(r.domain ?? r.name),skill:text(r.skill ?? r.sourceSkill),reason:text(r.reason ?? r.message)}});
+  return {administrative:{childName:text(admin.childName ?? admin.name),birthDate:text(admin.birthDate ?? admin.dob),evaluator:text(admin.evaluator ?? admin.assessor),missingFields:(list(admin.missingFields) ?? []).map(text)},domains,conflicts:refs(root?.conflicts),missingData:refs(root?.missingData ?? root?.missing),goalCandidates:(list(root?.goalCandidates ?? root?.candidates) ?? []).map(x=>{const r=record(x) ?? {};return {domain:text(r.domain),sourceSkill:text(r.sourceSkill ?? r.skill),reason:text(r.reason),suggestedTargetBehavior:text(r.suggestedTargetBehavior ?? r.targetBehavior)}})};
+};
+const normalizeGoals = (value: unknown) => { const root=record(value); const raw=list(root?.selectedGoals ?? root?.goals ?? root?.selected); if (!raw) return undefined; const selectedGoals=raw.map((x,index)=>{const g=record(x) ?? {};return {id:`goal-${index+1}`,domain:text(g.domain ?? g.name),sourceSkill:text(g.sourceSkill ?? g.skill),targetBehavior:text(g.targetBehavior ?? g.behavior ?? g.target),duration:text(g.duration),context:text(g.context),opportunityCondition:text(g.opportunityCondition ?? g.opportunities),maxSupport:text(g.maxSupport ?? g.support),masteryCriterion:text(g.masteryCriterion ?? g.criterion),contextsCount:Number(g.contextsCount) || 1,peopleCount:Number(g.peopleCount) || 1,consecutiveSessions:Number(g.consecutiveSessions) || 1,baselineStatus:text(g.baselineStatus)==="available" ? "available" as const : "missing" as const,baselineEvidence:text(g.baselineEvidence)}}); return {selectedGoals,notSelected:(list(root?.notSelected ?? root?.unselected) ?? []).map(x=>{const g=record(x)??{};return {sourceSkill:text(g.sourceSkill ?? g.skill),reason:text(g.reason)}})}; };
+const normalizeReview = (value: unknown) => { const root=record(value); const raw=list(root?.issues ?? root?.errors ?? root?.findings); if (!raw) return undefined; return {issues:raw.map((x,index)=>{const r=record(x)??{};const severity=text(r.severity).toLowerCase();return {criterionId:Number(r.criterionId ?? r.id) || index+1,severity:(severity==="critical"||severity==="format" ? severity : "warning") as "critical"|"warning"|"format",section:text(r.section ?? r.location),problem:text(r.problem ?? r.message ?? r.title),evidence:text(r.evidence),suggestedFix:text(r.suggestedFix ?? r.fix)}})}; };
 const fallbackReport = (input: ChildInput) => `**BÁO CÁO CAN THIỆP**
 
 ## I. THÔNG TIN HÀNH CHÍNH
@@ -161,7 +182,7 @@ export async function runWorkflow(
     }, 3000);
   };
   step("analyzer", "Đang đọc dữ liệu đánh giá của trẻ");
-  const analysis = options.resume?.analysisJson ?? await askJson<Analysis>("analyzer", ANALYZER_PROMPT, input.sourceData, analysisSchema, analysisJsonSchema, "analysis", settings, signal);
+  const analysis = options.resume?.analysisJson ?? await askJson<Analysis>("analyzer", ANALYZER_PROMPT, input.sourceData, normalizeAnalysis, analysisJsonSchema, "analysis", settings, signal);
   checkpoint({ ...options.resume, lastCompletedStep: "analysis", analysisJson: analysis, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
   step("ruleEngineAnalysis", "Đang kiểm tra dữ liệu phân tích theo quy tắc");
   const missingAdministrative = analysis.administrative.missingFields.filter(
@@ -186,7 +207,7 @@ export async function runWorkflow(
     "analyzer",
     GOALS_PROMPT,
     JSON.stringify({ analysis, priorityDomains: input.priorityDomains ?? [] }),
-    goalsSchema,
+    (value) => { const normalized = normalizeGoals(value); return normalized && (normalized.selectedGoals.length || !analysis.goalCandidates.length) ? normalized : undefined; },
     goalsJsonSchema,
     "goal_selection",
     settings,
@@ -229,7 +250,7 @@ export async function runWorkflow(
         "reviewer",
         REVIEWER_PROMPT,
         JSON.stringify({ report, analysis, goals }),
-        reviewerSchema,
+        normalizeReview,
         reviewerJsonSchema,
         "report_review",
         settings,
