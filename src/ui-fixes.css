@@ -23,7 +23,24 @@ footer {
 footer .composer {
   width: 100%;
   min-width: 0;
-  padding-right: 14px !important;
+  display: grid !important;
+  align-items: center !important;
+  min-height: 64px;
+  padding: 10px 14px 10px 58px !important;
+  overflow: visible;
+}
+
+footer .composer:has(.attachment) {
+  min-height: 120px;
+  padding-top: 66px !important;
+}
+
+footer .composer textarea {
+  min-height: 28px !important;
+  height: 28px;
+  align-self: center;
+  padding: 0 !important;
+  line-height: 28px !important;
 }
 
 footer .send {
@@ -44,9 +61,9 @@ footer .send {
 }
 
 footer .send::after {
-  content: "\2192" !important;
+  content: "🚀" !important;
   display: block;
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1;
   transform: translateY(-1px);
 }
@@ -89,6 +106,44 @@ footer .send:hover {
   border: 0;
   border-radius: 0;
   background: #0008;
+}
+
+footer .attachment {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+footer .attachment::first-letter {
+  font-size: 0;
+}
+
+footer .attachment::before {
+  content: "📄";
+  flex: 0 0 auto;
+  font-size: 18px;
+}
+
+footer .fileError {
+  position: absolute;
+  top: -24px;
+  left: 14px;
+  right: 14px;
+  color: #b42318;
 }
 
 @media (max-width: 1023px) {

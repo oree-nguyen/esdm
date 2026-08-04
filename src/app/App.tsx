@@ -236,7 +236,7 @@ export function App() {
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Dán dữ liệu đánh giá của trẻ…"
+            placeholder="Đính kèm file dữ liệu đánh giá của trẻ..."
             aria-label="Nội dung tin nhắn"
           />
           {attachedFile && (
