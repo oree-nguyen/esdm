@@ -160,6 +160,13 @@ export function App() {
         true,
       );
     } catch (error) {
+      setTrace((events) =>
+        events.map((item) =>
+          item.status === "active"
+            ? { ...item, status: "error" as const, text: `${item.text} - lỗi` }
+            : item,
+        ),
+      );
       if (error instanceof DOMException && error.name === "AbortError")
         say("Đã hủy quy trình.");
       else {

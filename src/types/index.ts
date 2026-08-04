@@ -107,7 +107,7 @@ export interface StepEvent {
     | "ruleEngineReport"
     | "fixer"
     | "done";
-  status: "active" | "done";
+  status: "active" | "done" | "error";
 }
 export type WorkflowStep = "none" | "analysis" | "goalSelection" | "writer" | "review" | "fixer" | "done";
 export interface WorkflowCheckpoint { lastCompletedStep: WorkflowStep; analysisJson?: Analysis; goalsJson?: GoalDraft[]; reportMarkdown?: string; reviewIssuesJson?: RuleCheckResult[]; fixRoundCount: number; }

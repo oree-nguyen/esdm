@@ -40,16 +40,20 @@ export function StepTraceStatus({
       )}
       {!working && (
         <button className="traceSummary" onClick={() => setOpen(false)}>
-          ⌄ Đã xử lý trong {elapsed} giây
+          ˅ Đã xử lý trong {elapsed} giây
         </button>
       )}
       {events.map((event) => (
         <div className={`stepEvent ${event.status}`} key={event.id}>
-          {event.status === "done" ? "✓" : <span className="traceDot" />}{" "}
+          {event.status === "done" ? "✓" : event.status === "error" ? "×" : <span className="traceDot" />}{" "}
           {event.text}
         </div>
       ))}
-      {resumable && onContinue && <button className="traceContinue" onClick={onContinue}>Tiếp tục</button>}
+      {resumable && onContinue && (
+        <button className="traceContinue" onClick={onContinue}>
+          Tiếp tục
+        </button>
+      )}
       <div ref={endRef} />
     </section>
   );
