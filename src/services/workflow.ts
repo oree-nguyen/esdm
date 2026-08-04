@@ -191,6 +191,17 @@ const comparableSkill = (value: string) =>
     .toLocaleLowerCase("vi")
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
+const hasEssentialGoalContent = (goal: GoalDraft) =>
+  [
+    goal.domain,
+    goal.sourceSkill,
+    goal.targetBehavior,
+    goal.duration,
+    goal.context,
+    goal.opportunityCondition,
+    goal.maxSupport,
+    goal.masteryCriterion,
+  ].every((value) => value.trim().length > 0);
 const mergeSections = (report: string, replacement: string) => {
   const changed = new Map(reportSections(replacement).map(section => [section.match(/^##\s+(.+)$/m)?.[1]?.trim(), section]));
   return reportSections(report).map(section => changed.get(section.match(/^##\s+(.+)$/m)?.[1]?.trim()) ?? section).join("");
@@ -268,7 +279,8 @@ export async function runWorkflow(
     evaluator: analysis.administrative.evaluator || input.evaluator,
   };
   step("goalSelection", "Đang chọn mục tiêu can thiệp phù hợp");
-  const goalsResult = options.resume?.goalsJson ? { selectedGoals: options.resume.goalsJson } : await askStructured(
+  const savedGoals = options.resume?.goalsJson?.filter(hasEssentialGoalContent);
+  const goalsResult = savedGoals?.length ? { selectedGoals: savedGoals } : await askStructured(
     "analyzer",
     GOALS_PROMPT,
     JSON.stringify({ analysis, priorityDomains: input.priorityDomains ?? [] }),
@@ -296,7 +308,6 @@ export async function runWorkflow(
       sourceSkill: source?.skill ?? goal.sourceSkill,
     };
   });
-  checkpoint({ ...options.resume, lastCompletedStep: "goalSelection", analysisJson: analysis, goalsJson: goals, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
   const pre = runRules("", input, analysis, goals);
   if (pre.some((x) => !x.passed && x.severity === "critical"))
     throw new Error(
@@ -305,6 +316,7 @@ export async function runWorkflow(
         .map((x) => x.message)
         .join(" "),
     );
+  checkpoint({ ...options.resume, lastCompletedStep: "goalSelection", analysisJson: analysis, goalsJson: goals, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
   step("writer", "Đang viết báo cáo chức năng hiện tại");
   let report = options.resume?.reportMarkdown ?? await askAi(
     "writer",
