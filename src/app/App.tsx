@@ -8,26 +8,12 @@ import { clearStorage, loadDraft, saveDraft } from "../storage/draftStorage";
 import type {
   ChatMessage,
   ChildInput,
-  FileAttachment,
   Settings,
   StepEvent,
 } from "../types";
 import "../attachment.css";
 
 const today = () => new Date().toLocaleDateString("en-CA");
-const extract = (text: string): Partial<ChildInput> => ({
-  childName: text
-    .match(/(?:họ và tên|tên trẻ|trẻ)\s*[:\-]\s*([^\n]+)/i)?.[1]
-    ?.trim(),
-  birthDate: text.match(/(?:ngày sinh)\s*[:\-]\s*([^\n]+)/i)?.[1]?.trim(),
-  evaluator: text.match(/(?:người đánh giá)\s*[:\-]\s*([^\n]+)/i)?.[1]?.trim(),
-  sourceData:
-    text
-      .match(
-        /(?:dữ liệu (?:nguồn|đánh giá)|quan sát)\s*[:\-]\s*([\s\S]+)/i,
-      )?.[1]
-      ?.trim() || text,
-});
 
 export function App() {
   const saved = loadDraft();
@@ -44,7 +30,6 @@ export function App() {
   const [draft, setDraft] = useState("");
   const [extractedText, setExtractedText] = useState("");
   const [attachedFile, setAttachedFile] = useState("");
-  const [attachment, setAttachment] = useState<FileAttachment>();
   const [fileError, setFileError] = useState("");
   const [report, setReport] = useState(saved.report ?? "");
   const [settings, setSettings] = useState<Settings>(
@@ -85,12 +70,6 @@ export function App() {
       return;
     }
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error("Không thể đọc tệp."));
-        reader.readAsDataURL(file);
-      });
       const result = await mammoth.extractRawText({
         arrayBuffer: await file.arrayBuffer(),
       });
@@ -98,11 +77,6 @@ export function App() {
       if (!text) throw new Error("Tệp DOCX không có văn bản để đọc.");
       setExtractedText(text);
       setAttachedFile(file.name);
-      setAttachment({
-        name: file.name,
-        mimeType: file.type || "application/octet-stream",
-        dataUrl,
-      });
     } catch (error) {
       setFileError(
         error instanceof Error ? error.message : "Không thể đọc tệp DOCX.",
@@ -125,9 +99,7 @@ export function App() {
     setDraft("");
     setExtractedText("");
     setAttachedFile("");
-    setAttachment(undefined);
     const fields: Partial<ChildInput> = {};
-    const fileChildName = attachedFile?.replace(/\.docx$/i, "") || "Trẻ";
     const missing = [
       !fields.childName && "tên trẻ",
       !fields.birthDate && "ngày sinh",
@@ -135,14 +107,13 @@ export function App() {
       !fields.sourceData && "dữ liệu nguồn",
     ].filter(Boolean);
     missing.length = 0;
-    if (attachment) missing.length = 0;
     if (missing.length || text.length < 40) {
       say(
         `Để bắt đầu, vui lòng bổ sung: ${missing.length ? missing.join(", ") : "dữ liệu nguồn chi tiết hơn"}.`,
       );
       return;
     }
-    if (!attachment && text.length > MAX_SOURCE_CHARS) {
+    if (text.length > MAX_SOURCE_CHARS) {
       say("Dữ liệu quá dài. Vui lòng rút gọn còn dưới 30.000 ký tự.");
       return;
     }
@@ -165,7 +136,7 @@ export function App() {
         controller.current.signal,
         (event) =>
           setTrace((events) =>
-            event.status === "done"
+            events.some((item) => item.id === event.id)
               ? events.map((item) => (item.id === event.id ? event : item))
               : [
                   ...events.map((item) =>
@@ -176,7 +147,6 @@ export function App() {
                   event,
                 ],
           ),
-        attachment,
       );
       setReport(result.report);
       say(
@@ -242,20 +212,6 @@ export function App() {
           elapsed={elapsed}
           onCancel={() => controller.current?.abort()}
         />
-        {false && working && (
-          <article className="status">
-            <span className="dot" /> Đang làm việc…{" "}
-            <button onClick={() => controller.current?.abort()}>Hủy</button>
-          </article>
-        )}
-        {!working && trace.length > 0 && (
-          <details className="status">
-            <summary>Đã xử lý trong {elapsed} giây</summary>
-            {trace.map((x) => (
-              <div key={x.id}>✓ {x.text}</div>
-            ))}
-          </details>
-        )}
       </section>
       <footer>
         <div className="composer">
@@ -280,7 +236,7 @@ export function App() {
         </div>
         <button
           className="send"
-          disabled={working || (!draft.trim() && !attachment)}
+          disabled={working || (!draft.trim() && !extractedText)}
           onClick={submit}
         >
           Gửi

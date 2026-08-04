@@ -12,13 +12,12 @@ export interface ChildInput {
 }
 export type SkillCategory = "strength" | "emerging" | "priority" | "observe";
 export interface SkillItem {
-  domain: string;
   skill: string;
   category: SkillCategory;
-  sourceEvidence: string;
-  supportLevel?: string;
-  conflict?: boolean;
-  missingData?: boolean;
+  evidence: string;
+  supportLevel: string;
+  conflict: boolean;
+  missingData: boolean;
 }
 export interface Analysis {
   administrative: {
@@ -28,14 +27,19 @@ export interface Analysis {
     missingFields: string[];
   };
   domains: { name: string; skills: SkillItem[] }[];
-  conflicts: string[];
-  missingData: string[];
+  conflicts: AnalysisReference[];
+  missingData: AnalysisReference[];
   goalCandidates: {
     domain: string;
     sourceSkill: string;
     reason: string;
     suggestedTargetBehavior: string;
   }[];
+}
+export interface AnalysisReference {
+  domain: string;
+  skill: string;
+  reason: string;
 }
 export interface GoalDraft {
   id: string;
@@ -50,8 +54,8 @@ export interface GoalDraft {
   contextsCount: number;
   peopleCount: number;
   consecutiveSessions: number;
-  baselineStatus?: "available" | "missing";
-  baselineEvidence?: string;
+  baselineStatus: "available" | "missing";
+  baselineEvidence: string;
 }
 export interface InterventionActivity {
   goalId: string;
@@ -90,11 +94,6 @@ export interface Settings {
   mode: "direct" | "worker";
   endpoint: string;
   testMode: boolean;
-}
-export interface FileAttachment {
-  name: string;
-  mimeType: string;
-  dataUrl: string;
 }
 export interface StepEvent {
   id: string;

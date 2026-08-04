@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AiError, askAi, askJson } from "./aiClient";
+import { askAi, askJson, type JsonSchema } from "./aiClient";
 import {
   ANALYZER_PROMPT,
   FIXER_PROMPT,
@@ -11,50 +11,47 @@ import { runRules } from "../rules/reportRules";
 import type {
   Analysis,
   ChildInput,
-  FileAttachment,
   GoalDraft,
   RuleCheckResult,
   Settings,
   StepEvent,
 } from "../types";
+const DOMAIN_LIST = ["Giao tiếp tiếp nhận", "Giao tiếp diễn đạt", "Hành vi tập trung chú ý", "Các kỹ năng xã hội", "Bắt chước", "Nhận thức", "Kỹ năng chơi", "Vận động tinh", "Vận động thô", "Tự lập"] as const;
+const domain = z.enum(DOMAIN_LIST);
 const analysisSchema = z.object({
   administrative: z.object({
     childName: z.string(),
     birthDate: z.string(),
     evaluator: z.string(),
     missingFields: z.array(z.string()),
-  }),
+  }).strict(),
   domains: z.array(
     z.object({
-      name: z.string(),
+      name: domain,
       skills: z.array(
         z.object({
-          domain: z.string(),
           skill: z.string(),
           category: z.enum(["strength", "emerging", "priority", "observe"]),
-          sourceEvidence: z.string(),
-          supportLevel: z.string().optional(),
-          conflict: z.boolean().optional(),
-          missingData: z.boolean().optional(),
-        }),
+          evidence: z.string(), supportLevel: z.string(), conflict: z.boolean(), missingData: z.boolean(),
+        }).strict(),
       ),
-    }),
+    }).strict(),
   ),
-  conflicts: z.array(z.string()),
-  missingData: z.array(z.string()),
+  conflicts: z.array(z.object({ domain, skill: z.string(), reason: z.string() }).strict()),
+  missingData: z.array(z.object({ domain, skill: z.string(), reason: z.string() }).strict()),
   goalCandidates: z.array(
     z.object({
-      domain: z.string(),
+      domain,
       sourceSkill: z.string(),
       reason: z.string(),
       suggestedTargetBehavior: z.string(),
-    }),
+    }).strict(),
   ),
-});
+}).strict();
 const goalsSchema = z.object({
   selectedGoals: z.array(
     z.object({
-      domain: z.string(),
+      domain,
       sourceSkill: z.string(),
       targetBehavior: z.string(),
       duration: z.string(),
@@ -65,27 +62,43 @@ const goalsSchema = z.object({
       contextsCount: z.number(),
       peopleCount: z.number(),
       consecutiveSessions: z.number(),
-      baselineStatus: z.enum(["available", "missing"]).optional(),
-      baselineEvidence: z.string().optional(),
-    }),
+      baselineStatus: z.enum(["available", "missing"]), baselineEvidence: z.string(),
+    }).strict(),
   ),
   notSelected: z.array(
-    z.object({ sourceSkill: z.string(), reason: z.string() }),
+    z.object({ sourceSkill: z.string(), reason: z.string() }).strict(),
   ),
-});
+}).strict();
 const reviewerSchema = z.object({
+  score: z.number().int(), passedCount: z.number().int(), failedCount: z.number().int(),
   issues: z.array(
     z.object({
-      id: z.number(),
-      title: z.string(),
-      passed: z.boolean(),
+      criterionId: z.number().int(),
       severity: z.enum(["critical", "warning", "format"]),
-      message: z.string(),
-      section: z.string().optional(),
-      suggestedFix: z.string().optional(),
-    }),
+      section: z.string(), problem: z.string(), evidence: z.string(), suggestedFix: z.string(),
+    }).strict(),
   ),
-});
+}).strict();
+const object = (properties: Record<string, unknown>, required: string[]) => ({ type: "object", additionalProperties: false, required, properties });
+const string = { type: "string" };
+const boolean = { type: "boolean" };
+const integer = { type: "integer" };
+const domainSchema = { type: "string", enum: DOMAIN_LIST };
+const analysisJsonSchema: JsonSchema = object({
+  administrative: object({ childName: string, birthDate: string, evaluator: string, missingFields: { type: "array", items: string } }, ["childName", "birthDate", "evaluator", "missingFields"]),
+  domains: { type: "array", items: object({ name: domainSchema, skills: { type: "array", items: object({ skill: string, category: { type: "string", enum: ["strength", "emerging", "priority", "observe"] }, evidence: string, supportLevel: string, conflict: boolean, missingData: boolean }, ["skill", "category", "evidence", "supportLevel", "conflict", "missingData"]) } }, ["name", "skills"]) },
+  conflicts: { type: "array", items: object({ domain: domainSchema, skill: string, reason: string }, ["domain", "skill", "reason"]) },
+  missingData: { type: "array", items: object({ domain: domainSchema, skill: string, reason: string }, ["domain", "skill", "reason"]) },
+  goalCandidates: { type: "array", items: object({ domain: domainSchema, sourceSkill: string, reason: string, suggestedTargetBehavior: string }, ["domain", "sourceSkill", "reason", "suggestedTargetBehavior"]) },
+}, ["administrative", "domains", "conflicts", "missingData", "goalCandidates"]);
+const goalsJsonSchema: JsonSchema = object({
+  selectedGoals: { type: "array", items: object({ domain: domainSchema, sourceSkill: string, targetBehavior: string, duration: string, context: string, opportunityCondition: string, maxSupport: string, masteryCriterion: string, contextsCount: integer, peopleCount: integer, consecutiveSessions: integer, baselineStatus: { type: "string", enum: ["available", "missing"] }, baselineEvidence: string }, ["domain", "sourceSkill", "targetBehavior", "duration", "context", "opportunityCondition", "maxSupport", "masteryCriterion", "contextsCount", "peopleCount", "consecutiveSessions", "baselineStatus", "baselineEvidence"]) },
+  notSelected: { type: "array", items: object({ sourceSkill: string, reason: string }, ["sourceSkill", "reason"]) },
+}, ["selectedGoals", "notSelected"]);
+const reviewerJsonSchema: JsonSchema = object({
+  score: integer, passedCount: integer, failedCount: integer,
+  issues: { type: "array", items: object({ criterionId: integer, severity: { type: "string", enum: ["critical", "warning", "format"] }, section: string, problem: string, evidence: string, suggestedFix: string }, ["criterionId", "severity", "section", "problem", "evidence", "suggestedFix"]) },
+}, ["score", "passedCount", "failedCount", "issues"]);
 const fallbackReport = (input: ChildInput) => `**BÁO CÁO CAN THIỆP**
 
 ## I. THÔNG TIN HÀNH CHÍNH
@@ -120,7 +133,6 @@ export async function runWorkflow(
   settings: Settings,
   signal: AbortSignal,
   onStepEvent: (event: StepEvent) => void,
-  attachment?: FileAttachment,
 ) {
   let sequence = 0;
   let active: StepEvent | undefined;
@@ -138,53 +150,16 @@ export async function runWorkflow(
     filler = setTimeout(() => {
       if (active)
         onStepEvent({
-          id: `evt-${++sequence}`,
-          text: "Vẫn đang xử lý…",
+          ...active,
+          text: `${active.text}…`,
           phase: active.phase,
           status: "active",
         });
     }, 3000);
   };
   step("analyzer", "Đang đọc dữ liệu đánh giá của trẻ");
-  let analysis: Analysis;
-  try {
-    analysis = await askJson<Analysis>(
-      "analyzer",
-      ANALYZER_PROMPT,
-      input.sourceData,
-      analysisSchema,
-      settings,
-      signal,
-      attachment,
-    );
-  } catch (error) {
-    if (
-      !attachment ||
-      (error instanceof DOMException && error.name === "AbortError") ||
-      !(error instanceof AiError)
-    )
-      throw error;
-    step("analyzer", "Đang đọc nội dung văn bản của tệp");
-    try {
-      analysis = await askJson<Analysis>(
-        "analyzer",
-        ANALYZER_PROMPT,
-        input.sourceData,
-        analysisSchema,
-        settings,
-        signal,
-      );
-    } catch (fallbackError) {
-      if (
-        fallbackError instanceof DOMException &&
-        fallbackError.name === "AbortError"
-      )
-        throw fallbackError;
-      step("analyzer", "Không thể chuẩn hóa dữ liệu phản hồi");
-      throw fallbackError;
-    }
-  }
-  step("ruleEngineAnalysis", "Đang kiểm tra dữ liệu theo quy tắc");
+  const analysis = await askJson<Analysis>("analyzer", ANALYZER_PROMPT, input.sourceData, analysisSchema, analysisJsonSchema, "analysis", settings, signal);
+  step("ruleEngineAnalysis", "Đang kiểm tra dữ liệu phân tích theo quy tắc");
   const missingAdministrative = analysis.administrative.missingFields.filter(
     (field) => field === "childName" || field === "birthDate",
   );
@@ -208,6 +183,8 @@ export async function runWorkflow(
     GOALS_PROMPT,
     JSON.stringify({ analysis, priorityDomains: input.priorityDomains ?? [] }),
     goalsSchema,
+    goalsJsonSchema,
+    "goal_selection",
     settings,
     signal,
   );
@@ -240,6 +217,8 @@ export async function runWorkflow(
         REVIEWER_PROMPT,
         JSON.stringify({ report, analysis, goals }),
         reviewerSchema,
+        reviewerJsonSchema,
+        "report_review",
         settings,
         signal,
       ),
@@ -247,7 +226,7 @@ export async function runWorkflow(
     ]);
     issues = [
       ...rules,
-      ...review.issues.map((x) => ({ ...x, source: "reviewer" as const })),
+      ...review.issues.map((x) => ({ id: x.criterionId, title: `Tiêu chí ${x.criterionId}`, passed: false, severity: x.severity, message: x.problem, section: x.section, suggestedFix: x.suggestedFix, source: "reviewer" as const })),
     ].filter((x) => !x.passed);
     if (!issues.length) break;
     if (round === 2) break;
