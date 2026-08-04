@@ -88,8 +88,10 @@ footer .send:hover {
 
 .settingsDone {
   display: block !important;
+  width: fit-content !important;
   margin-top: 20px;
-  margin-right: auto !important;
+  margin-left: auto !important;
+  margin-right: 0 !important;
   background: #8ab4f8 !important;
   color: #123b76 !important;
   padding: 0 20px !important;

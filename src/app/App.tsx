@@ -39,9 +39,10 @@ export function App() {
   const [attachedFile, setAttachedFile] = useState("");
   const [fileError, setFileError] = useState("");
   const [report, setReport] = useState(restored?.stepOutputs.reportMarkdown ?? saved.report ?? "");
-  const [settings, setSettings] = useState<Settings>(
-    saved.settings ?? DEFAULT_SETTINGS,
-  );
+  const [settings, setSettings] = useState<Settings>(() => {
+    const stored = saved.settings ?? DEFAULT_SETTINGS;
+    return stored.persistKey ? stored : { ...stored, apiKey: "" };
+  });
   const [open, setOpen] = useState(false),
     [settingsOpen, setSettingsOpen] = useState(false),
     [working, setWorking] = useState(false);
@@ -49,7 +50,12 @@ export function App() {
     [elapsed, setElapsed] = useState(0);
   const controller = useRef<AbortController | null>(null);
   useEffect(
-    () => saveDraft({ messages, report, settings }),
+    () =>
+      saveDraft({
+        messages,
+        report,
+        settings: settings.persistKey ? settings : { ...settings, apiKey: "" },
+      }),
     [messages, report, settings],
   );
   useEffect(() => { saveSession({ ...session, messages, stepTraceLog: trace.map(x => ({ text: x.text, phase: x.phase })), stepOutputs: { ...session.stepOutputs, reportMarkdown: report } }); setSessions(loadSessionIndex()); }, [session, messages, report, trace]);
@@ -358,7 +364,7 @@ export function App() {
               />{" "}
               Test mode: use openai/gpt-oss-20b:free for all roles
             </label>
-            <button className="settingsDone" onClick={() => setSettingsOpen(false)}>Xong</button>
+            <button className="settingsDone" onClick={() => setSettingsOpen(false)}>Lưu</button>
           </section>
         </div>
       )}
