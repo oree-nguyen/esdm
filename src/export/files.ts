@@ -1,7 +1,7 @@
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
 
 const slug = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-const download = (blob: Blob, filename: string) => { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url); };
+const download = (blob: Blob, filename: string) => { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); setTimeout(() => URL.revokeObjectURL(url), 0); };
 export function downloadMarkdown(report: string, name: string, date: string) { download(new Blob([report], { type: 'text/markdown;charset=utf-8' }), `${slug(name)}-${date}.md`); }
 
 function inlineRuns(text: string, size = 22, italic = false) {
@@ -22,7 +22,15 @@ function parseReport(report: string): Paragraph[] {
   });
 }
 
+export async function buildDocx(report: string) {
+  return Packer.toBlob(new Document({ sections: [{ properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } }, children: parseReport(report) }] }));
+}
+
+export function downloadBlob(blob: Blob, filename: string) {
+  download(blob, filename);
+}
+
 export async function downloadDocx(report: string, name: string, date: string) {
-  const blob = await Packer.toBlob(new Document({ sections: [{ properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } }, children: parseReport(report) }] }));
+  const blob = await buildDocx(report);
   download(blob, `${slug(name)}-${date}.docx`);
 }

@@ -153,3 +153,88 @@ footer .fileError {
     padding-left: 60px !important;
   }
 }
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.cancelAll {
+  min-height: 36px;
+  padding: 0 12px;
+  color: #b42318;
+  font-size: 13px;
+}
+
+.batchPreparing,
+.batchConfirm,
+.batchSummary {
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+}
+
+.batchPreparing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.batchPreparing span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: workflowPulse 1.2s ease-in-out infinite;
+}
+
+.batchConfirm p { margin: 0 0 8px; }
+.batchConfirm small { display: block; margin-bottom: 10px; color: #b42318; }
+.batchConfirm button,
+.batchSummary button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-app);
+}
+.batchConfirm button { border-color: transparent; background: #8ab4f8; color: #123b76; }
+
+.batchSummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.batchSuccess { color: #087443; }
+.batchFailure { color: #b42318; }
+
+.settingsSection {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.settingsSection h3 {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: .08em;
+}
+.modal .toggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.toggleRow input { flex: 0 0 auto; width: 42px; height: 22px; accent-color: #8ab4f8; }
+
+@media (max-width: 520px) {
+  .headerActions { gap: 0; }
+  .headerActions button { padding-left: 7px; padding-right: 7px; }
+  .cancelAll { font-size: 12px; }
+  .batchSummary { align-items: stretch; flex-direction: column; }
+  .batchSummary button { width: 100%; }
+}

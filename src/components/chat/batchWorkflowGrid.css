@@ -1,0 +1,50 @@
+.batchGrid {
+  --batch-columns: 2;
+  display: grid;
+  grid-template-columns: repeat(var(--batch-columns), minmax(0, 1fr));
+  gap: 8px;
+  margin: 18px 0;
+  padding: 12px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+}
+
+.workflowCell {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  height: 120px;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-app);
+}
+
+.workflowFile { display: flex; min-width: 0; align-items: center; gap: 6px; font-size: 12px; }
+.workflowFile > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workflowOpen { width: 28px; min-width: 28px; height: 28px; min-height: 28px; margin-left: auto; padding: 0; border-radius: 8px; background: var(--bg-hover); }
+.workflowProgressRow { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-muted); }
+.workflowProgress { flex: 1; height: 4px; overflow: hidden; border-radius: 999px; background: var(--border); }
+.workflowProgress i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .25s ease; }
+.workflowCell.completed .workflowProgress i { background: #22a06b; }
+.workflowCell.error .workflowProgress i { background: #d92d20; }
+.workflowCell.cancelled .workflowProgress i { background: #98a2b3; }
+.workflowStatus { overflow: hidden; color: var(--text-secondary); font-size: 11px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.workflowCellFooter { display: flex; align-items: center; justify-content: space-between; min-height: 24px; }
+.workflowStateDot { width: 8px; height: 8px; border-radius: 50%; background: #98a2b3; }
+.workflowStateDot.running { background: var(--accent); animation: workflowPulse 1.2s ease-in-out infinite; }
+.workflowStateDot.completed { background: #22a06b; }
+.workflowStateDot.error { background: #d92d20; }
+.workflowStateDot.cancelled { background: #98a2b3; }
+.workflowCancel { width: 24px; min-width: 24px; height: 24px; min-height: 24px; padding: 0; border-radius: 50%; color: var(--text-secondary); font-size: 18px; line-height: 1; }
+.workflowCancel:hover { background: var(--bg-hover); }
+
+@keyframes workflowPulse { 50% { opacity: .35; transform: scale(.8); } }
+
+@media (max-width: 1023px) {
+  .batchGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 8px; }
+  .workflowCell { height: auto; min-height: 120px; }
+}
