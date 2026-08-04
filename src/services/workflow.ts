@@ -110,10 +110,15 @@ const category = (value: unknown): Analysis["domains"][number]["skills"][number]
   if (["priority","prioritized","ưu tiên","n"].includes(key)) return "priority";
   return "observe";
 };
+const normalizeDomain = (value: unknown) => {
+  const raw = text(value).trim();
+  const head = raw.split(":")[0].trim();
+  return DOMAIN_LIST.find(name => head === name || head.startsWith(name) || name.startsWith(head)) ?? raw;
+};
 const normalizeAnalysis = (value: unknown): Analysis | undefined => {
   const root=record(value), rawDomains=list(root?.domains ?? root?.domain ?? root?.lĩnhVực);
   if (!rawDomains?.length) return undefined;
-  const domains=rawDomains.map(item=>{const d=record(item) ?? {};const skills=list(d.skills ?? d.items ?? d.kỹNăng) ?? [];return {name:text(d.name ?? d.domain ?? d.lĩnhVực),skills:skills.map(skill=>{const s=record(skill) ?? {};return {skill:text(s.skill ?? s.name ?? s.title),category:category(s.category ?? s.group ?? s.status),evidence:text(s.evidence ?? s.sourceEvidence ?? s.source ?? s.bằngChứng),supportLevel:text(s.supportLevel ?? s.support),conflict:Boolean(s.conflict),missingData:Boolean(s.missingData)}})}}).filter(d=>d.name || d.skills.length);
+  const domains=rawDomains.map(item=>{const d=record(item) ?? {};const skills=list(d.skills ?? d.items ?? d.kỹNăng) ?? [];return {name:normalizeDomain(d.name ?? d.domain ?? d.lĩnhVực),skills:skills.map(skill=>{const s=record(skill) ?? {};const skillCategory=category(s.category ?? s.group ?? s.status);return {skill:text(s.skill ?? s.name ?? s.title),category:skillCategory,evidence:text(s.evidence ?? s.sourceEvidence ?? s.source ?? s.bằngChứng),supportLevel:text(s.supportLevel ?? s.support),conflict:Boolean(s.conflict) || skillCategory === "emerging",missingData:Boolean(s.missingData)}})}}).filter(d=>d.name || d.skills.length);
   if (!domains.length) return undefined;
   const admin=record(root?.administrative ?? root?.admin) ?? {};
   const refs=(value:unknown)=> (list(value) ?? []).map(x=>{const r=record(x) ?? {};return {domain:text(r.domain ?? r.name),skill:text(r.skill ?? r.sourceSkill),reason:text(r.reason ?? r.message)}});
