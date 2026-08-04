@@ -7,7 +7,6 @@ import { StepTraceStatus } from "../components/chat/StepTraceStatus";
 import { BatchWorkflowGrid, type BatchJob } from "../components/chat/BatchWorkflowGrid";
 import { deleteBatch, deleteSession, loadActiveSession, loadBatch, loadBatches, loadDraft, loadSession, loadSessionIndex, saveBatch, saveDraft, saveSession } from "../storage/draftStorage";
 import type { BatchRecord, ChatMessage, ChildInput, ReportSession, Settings, StepEvent, WorkflowCheckpoint, WorkflowStep } from "../types";
-import "../attachment.css";
 
 const today = () => new Date().toLocaleDateString("en-CA");
 const welcomeMessage = (): ChatMessage => ({

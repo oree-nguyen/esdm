@@ -1,1 +1,1 @@
-.traceCancel{float:right;min-height:30px;padding:0 10px;font-size:.85rem}
+.traceCancel { float: right; min-height: 32px; padding: 0 10px; color: var(--danger); font-size: 12px; }

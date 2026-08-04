@@ -1,1 +1,22 @@
-.stepTrace{margin:12px 0;padding:12px 14px;border-radius:14px;background:#f7f8fc;color:#535d73;max-height:210px;overflow:auto}.stepEvent{padding:4px 0;animation:traceIn .2s ease-out}.stepEvent.done{opacity:.65}.stepEvent.error{color:#b42318;font-weight:500}.traceDot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#5b7cfa;animation:tracePulse 1s infinite}.traceSummary{border:0;background:transparent;min-height:28px;padding:0;color:#535d73;text-align:left}.stepTrace .traceSummary{display:block;margin-bottom:6px}@keyframes tracePulse{50%{opacity:.25}}@keyframes traceIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.stepTrace {
+  max-height: 240px;
+  margin: 8px 0 24px;
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  overflow: auto;
+}
+
+.stepEvent { padding: 4px 0; font-size: 13px; line-height: 1.45; animation: traceIn .2s ease-out; }
+.stepEvent.done { opacity: .68; }
+.stepEvent.error { color: var(--danger); font-weight: 600; }
+.traceDot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: tracePulse 1.1s ease-in-out infinite; }
+.traceSummary { min-height: 34px; padding: 0 4px; color: var(--text-secondary); text-align: left; font-size: 13px; }
+.stepTrace .traceSummary { display: block; margin-bottom: 6px; }
+.traceContinue { min-height: 36px; margin-top: 8px; padding: 0 14px; background: var(--accent); color: #f8fbff; }
+.traceContinue:hover { background: var(--accent-hover); }
+
+@keyframes tracePulse { 50% { opacity: .28; transform: scale(.8); } }
+@keyframes traceIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
