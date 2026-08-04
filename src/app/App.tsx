@@ -323,7 +323,7 @@ export function App() {
         say("Đã hủy quy trình.");
       } else {
         const message = error instanceof Error ? error.message : "Đã có lỗi không xác định.";
-        setSession((current) => ({ ...current, status: message.includes("chưa có") ? "stopped_missing_info" : "error", lastError: message }));
+        setSession((current) => ({ ...current, status: "error", lastError: message }));
         say(message);
       }
     } finally {

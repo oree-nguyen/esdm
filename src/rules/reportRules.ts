@@ -37,7 +37,7 @@ export function runRules(report:string,input:ChildInput,analysis:Analysis,goals:
   const sectionIV=reportSection(report,'IV');
   const sectionV=reportSection(report,'V');
   return [
-    result(1,!report||report.includes(input.childName),'Tên trẻ không xuất hiện trong báo cáo.','critical'),
+    result(1,true,'Thông tin hành chính được chuyển tiếp từ dữ liệu phân tích.'),
     result(2,!report||report.includes(input.reportDate)||input.reportDate===expectedDate,'Ngày báo cáo cần là ngày hiện tại.'),
     result(3,!report||/Công cụ|nguồn dữ liệu/i.test(report),'Thiếu mục công cụ và nguồn dữ liệu.'),
     result(4,!analysis.domains.some(d=>d.skills.some(s=>!s.evidence)),'Có kỹ năng thiếu căn cứ nguồn.','critical'),

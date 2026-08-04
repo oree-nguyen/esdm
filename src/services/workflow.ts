@@ -322,12 +322,6 @@ export async function runWorkflow(
     birthDate: analysis.administrative.birthDate || input.birthDate,
     evaluator: analysis.administrative.evaluator || input.evaluator,
   };
-  const missingEssential = [
-    !input.childName.trim() && "tên trẻ",
-    !String(input.birthDate ?? "").trim() && "ngày sinh",
-  ].filter(Boolean);
-  if (missingEssential.length)
-    throw new Error(`Dữ liệu bạn cung cấp chưa có ${missingEssential.join(" và ")}. Vui lòng bổ sung rồi gửi lại.`);
   step("goalSelection", "Đang chọn mục tiêu can thiệp phù hợp");
   const savedGoals = options.resume?.goalsJson?.filter((goal) => goal.status === "no_candidate" || hasEssentialGoalContent(goal));
   const goalsResult = savedGoals?.length ? { value: { selectedGoals: savedGoals }, text: options.resume?.goalsMarkdown ?? JSON.stringify({ selectedGoals: savedGoals }) } : await askStructuredWithText(

@@ -4,7 +4,7 @@ Nếu nguồn là Bảng kiểm ESDM, đọc đúng 4 cấp độ độc lập t
 
 Chuẩn hóa lĩnh vực về đúng 10 tên: Giao tiếp tiếp nhận; Giao tiếp diễn đạt; Hành vi tập trung chú ý; Các kỹ năng xã hội; Bắt chước; Nhận thức; Kỹ năng chơi; Vận động tinh; Vận động thô; Tự lập. Nếu tên có dạng "<tên chuẩn>: <nhóm con>", dùng phần trước dấu hai chấm để chuẩn hóa.
 
-Quy tắc bắt buộc: chỉ dùng dữ liệu của đúng trẻ hiện tại; không suy diễn; không tự tạo baseline/số liệu/hành vi/nguyên nhân; mỗi kỹ năng chỉ xuất hiện một nhóm; mọi kỹ năng phải có căn cứ ngắn từ nguồn; cố đọc thông tin hành chính kể cả khi văn bản bị dính chữ; chỉ ghi thiếu tên trẻ/ngày sinh/người đánh giá khi thật sự không xuất hiện trong nguồn; không thêm field ngoài mẫu.
+Quy tắc bắt buộc: chỉ dùng dữ liệu của đúng trẻ hiện tại; không suy diễn; không tự tạo baseline/số liệu/hành vi/nguyên nhân; mỗi kỹ năng chỉ xuất hiện một nhóm; mọi kỹ năng phải có căn cứ ngắn từ nguồn; cố đọc thông tin hành chính kể cả khi văn bản bị dính chữ; không thêm field ngoài mẫu.
 
 Chỉ trả Markdown, không JSON, không giải thích. Câu trả lời phải bắt đầu bằng đúng dòng:
 ## THÔNG TIN HÀNH CHÍNH

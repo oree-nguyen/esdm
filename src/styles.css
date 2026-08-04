@@ -110,7 +110,6 @@ header small { display: block; margin-top: 2px; color: var(--text-muted); font-s
 .sessionItem i { display: inline-block; width: 7px; height: 7px; margin-right: 9px; border-radius: 50%; background: var(--warning); }
 .sessionItem i.completed { background: var(--success); }
 .sessionItem i.error,
-.sessionItem i.stopped_missing_info { background: var(--danger); }
 
 .sidebarBackdrop { position: fixed; z-index: 29; inset: 0; border: 0; border-radius: 0; background: rgb(6 10 18 / .58); }
 

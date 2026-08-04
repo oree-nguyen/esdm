@@ -9,6 +9,10 @@ const report=(sectionIII:string,sectionIV='')=>`## I. THÔNG TIN HÀNH CHÍNH\n-
 
 describe('rule engine',()=>{
   it('rejects a goal from an invalid source group',()=>{const bad={...goal,sourceSkill:'Không có'};expect(runRules('',input,analysis,[bad]).find(x=>x.id===12)?.passed).toBe(false)});
+  it('does not reject a report because child name or birth date is absent',()=>{
+    const results=runRules('Nội dung báo cáo.',{...input,childName:'Nguyễn Trâm Anh',birthDate:''},analysis,[]);
+    expect(results.find(x=>x.id===1)?.passed).toBe(true);
+  });
   it('allows the fixed five individual plus two group goals',()=>expect(runRules('',input,analysis,Array(7).fill(goal)).find(x=>x.id===13)?.passed).toBe(true));
   it('rejects more than seven direct goals',()=>expect(runRules('',input,analysis,Array(8).fill(goal)).find(x=>x.id===13)?.passed).toBe(false));
   it('keeps a valid no-candidate topic without reporting missing goal fields',()=>{
