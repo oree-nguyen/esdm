@@ -42,7 +42,7 @@ B. Hai mục tiêu can thiệp nhóm, đúng thứ tự:
 2. Kỹ năng chơi/làm việc nhóm: nguồn Kỹ năng chơi hoặc Các kỹ năng xã hội, khác mục tiêu cá nhân 1.
 C. Hai hoạt động dành cho gia đình: gợi ý ngắn, bám dữ liệu phân tích, không viết SMART goal.
 
-Chỉ chọn kỹ năng nguồn từ nhóm E/đang hình thành hoặc P/ưu tiên phát triển; ưu tiên E trước P. Không chọn điểm mạnh hoặc cần quan sát thêm. Mỗi mục tiêu có một hành vi đích quan sát và đếm được. Không tạo baseline. Thời gian dự kiến: dễ 4-5 tuần; trung bình 6-7 tuần; khó 8 tuần. Nếu chủ đề không có ứng viên phù hợp, vẫn giữ khối đó và ghi "- Trạng thái: không có ứng viên phù hợp trong dữ liệu".
+Chỉ chọn kỹ năng nguồn từ nhóm E/đang hình thành hoặc P/ưu tiên phát triển; ưu tiên E trước P. Không chọn điểm mạnh hoặc cần quan sát thêm. Ràng buộc bắt buộc cho cả 5 mục tiêu cá nhân: nguồn kỹ năng của mỗi mục tiêu chỉ được lấy từ nhóm đang hình thành (+/-) hoặc nhóm ưu tiên phát triển (-) trong lĩnh vực chủ đề tương ứng. Nếu lĩnh vực chỉ có kỹ năng điểm mạnh hoặc cần quan sát thêm thì coi như không có ứng viên phù hợp, không hạ chuẩn xuống chọn điểm mạnh để lấp chỗ trống. Mỗi mục tiêu có một hành vi đích quan sát và đếm được. Không tạo baseline. Thời gian dự kiến: dễ 4-5 tuần; trung bình 6-7 tuần; khó 8 tuần. Nếu chủ đề không có ứng viên phù hợp, vẫn giữ khối đó và ghi "- Trạng thái: không có ứng viên phù hợp trong dữ liệu".
 
 Chỉ trả Markdown, không JSON, không giải thích. Câu trả lời phải bắt đầu bằng:
 ## MỤC TIÊU CÁ NHÂN
@@ -116,7 +116,12 @@ Dùng đúng nguyên văn 7 heading sau, không đổi chữ, không đổi th�
 
 Quy ước Markdown: không dùng heading cấp 1; dòng đầu là tiêu đề in đậm; heading lớn là ## số La Mã; heading phụ là ###; bullet cấp 1 dùng "- "; bullet cấp 2 thụt hai khoảng trắng; nhãn đầu dòng in đậm dạng "- **Họ và tên trẻ:** ...".
 
-Chỉ trả nội dung báo cáo Markdown.`;
+Chỉ trả nội dung báo cáo Markdown.
+
+QUY TẮC XUẤT BÁO CÁO BẮT BUỘC: Ứng dụng sẽ tự chèn nguyên văn Mục I và Mục II sau khi nhận phản hồi. Không viết lại, không thêm, không tách riêng khối "Công cụ và nguồn dữ liệu" hoặc Mục II. Mục I cuối cùng chỉ có đúng 6 nhãn theo thứ tự: Họ và tên trẻ; Ngày sinh; Người đánh giá; Ngày đánh giá; Người thực hiện can thiệp; Công cụ và nguồn dữ liệu. Mục IV cuối cùng chỉ hiển thị 9 nhãn công khai: Thời gian dự kiến; Bối cảnh thực hiện; Điều kiện tạo cơ hội; Hành vi quan sát được; Mức hỗ trợ tối đa; Tiêu chí đạt; Số hoạt động hoặc bối cảnh áp dụng; Số người khác nhau; Số buổi liên tiếp. Không xuất hiện các nhãn nội bộ Lĩnh vực nguồn, Kỹ năng nguồn, Độ khó hoặc Baseline trong báo cáo cuối.
+
+Mọi heading cấp 3 của Mục III và Mục IV PHẢI có số thứ tự ngay sau dấu ###, ví dụ "### 1. Giao tiếp tiếp nhận".
+`;
 
 export const REVIEWER_PROMPT = `Bạn là người kiểm tra độc lập. Bạn không viết lại báo cáo, chỉ phát hiện lỗi theo 20 tiêu chí.
 

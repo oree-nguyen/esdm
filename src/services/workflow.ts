@@ -246,6 +246,85 @@ const mergeSections = (report: string, replacement: string) => {
   const changed = new Map(reportSections(replacement).map(section => [section.match(/^##\s+(.+)$/m)?.[1]?.trim(), section]));
   return reportSections(report).map(section => changed.get(section.match(/^##\s+(.+)$/m)?.[1]?.trim()) ?? section).join("");
 };
+const fixedToolsBlock = `- **Công cụ và nguồn dữ liệu:**
+  - Quan sát trực tiếp trẻ trong các hoạt động học tập, vui chơi và sinh hoạt tại lớp.
+  - Ghi chép quan sát hành vi và dữ liệu can thiệp của giáo viên.
+  - Hồ sơ đánh giá chức năng hiện tại của trẻ.
+  - Tham khảo các lĩnh vực phát triển và tiêu chí kỹ năng của Bảng kiểm Chương trình Khởi đầu Denver.`;
+const fixedCodeSection = `## II. HỆ THỐNG MÃ DỮ LIỆU VÀ QUY TẮC CHUNG
+- **I (Độc lập):** Trẻ thực hiện đúng hoàn toàn mà không cần bất kỳ sự hỗ trợ nào.
+- **G (Gợi ý):** Trẻ thực hiện sau khi nhận được gợi ý bằng lời hoặc cử chỉ.
+- **M (Làm mẫu):** Trẻ thực hiện sau khi người lớn làm mẫu thao tác hoặc hành vi.
+- **H (Hỗ trợ thể chất):** Trẻ thực hiện khi có sự hỗ trợ một phần bằng tay hoặc hướng dẫn thể chất.
+- **F (Chưa đạt):** Trẻ chưa thực hiện hoặc thực hiện chưa đúng.
+
+Quy tắc chung: ghi nhận mức độc lập cao nhất mà trẻ đạt được trong từng cơ hội; ghi dữ liệu theo đúng hành vi quan sát được; giảm dần hỗ trợ khi trẻ đã duy trì ổn định.`;
+const replaceSection = (report: string, roman: string, replacement: string) => {
+  const sections = reportSections(report);
+  let replaced = false;
+  const mapped = sections.map((section) => {
+    if (new RegExp(`^##\\s+${roman}\\.`, "m").test(section)) {
+      replaced = true;
+      return `${replacement.trim()}\n\n`;
+    }
+    return section;
+  });
+  if (replaced) return mapped.join("");
+  const insertion = `${replacement.trim()}\n\n`;
+  const firstHeading = mapped.findIndex((section) => /^##\s+[IVX]+\./m.test(section));
+  mapped.splice(firstHeading < 0 ? mapped.length : firstHeading, 0, insertion);
+  return mapped.join("");
+};
+const numberSubheadings = (section: string) => {
+  let number = 0;
+  return section.replace(/^###\s+(?!\d+[.)]\s)(.+)$/gm, (_line, title: string) => `### ${++number}. ${title.trim()}`);
+};
+const foldLabel = (label: string) => label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("vi").trim();
+const sanitizeGoalSection = (section: string) => {
+  let fieldIndex = 0;
+  return section.split(/\r?\n/).flatMap((line) => {
+    const label = line.match(/^(\s*-\s*\*\*)([^*]+)(\*\*\s*:)/);
+    if (!label) {
+      if (/^###\s+/i.test(line)) fieldIndex = 0;
+      return [line];
+    }
+    const current = fieldIndex++;
+    // The first two labels, difficulty (fourth), and baseline are internal
+    // goal-selection metadata and must never reach the parent-facing report.
+    if (current === 0 || current === 1 || current === 3 || /baseline/i.test(label[2])) return [];
+    const folded = foldLabel(label[2]);
+    const replacement = folded.includes("dich") || folded.includes("đich")
+      ? "H\u00e0nh vi quan s\u00e1t \u0111\u01b0\u1ee3c"
+      : folded.includes("boi canh ap dung")
+        ? "S\u1ed1 ho\u1ea1t \u0111\u1ed9ng ho\u1eb7c b\u1ed1i c\u1ea3nh \u00e1p d\u1ee5ng"
+        : label[2];
+    return [`${label[1]}${replacement}${label[3]}${line.slice(label[0].length)}`];
+  }).join("\n");
+};
+export const enforceFixedReportSections = (report: string, input: ChildInput, analysis: Analysis) => {
+  const admin = analysis.administrative;
+  const administrative = `## I. THÔNG TIN HÀNH CHÍNH
+- **Họ và tên trẻ:** ${admin.childName || input.childName}
+- **Ngày sinh:** ${admin.birthDate || input.birthDate || ""}
+- **Người đánh giá:** ${admin.evaluator || input.evaluator || ""}
+- **Ngày đánh giá:** ${input.reportDate}
+- **Người thực hiện can thiệp:** Giáo viên và gia đình
+${fixedToolsBlock}`;
+  let normalized = replaceSection(report, "I", administrative);
+  normalized = replaceSection(normalized, "II", fixedCodeSection);
+  return normalized
+    .split(/(?=^##\s+)/m)
+    .map((section) => {
+      if (/^##\s+IV\./m.test(section)) {
+        const cleaned = sanitizeGoalSection(section)
+          .replace(/^\s*-\s*\*\*[^*]*(?:\u006e\u0067\u0075\u1ed3\u006e|\u006e\u0067\u0075\u006f\u006e|baseline)[^*]*\*\*.*$/gmi, "")
+          .replace(/\*\*[^*]*(?:\u0111\u00edch|\u0111ich)[^*]*\*\*/gi, "**H\u00e0nh vi quan s\u00e1t \u0111\u01b0\u1ee3c**");
+        return numberSubheadings(cleaned);
+      }
+      return /^##\s+III\./m.test(section) ? numberSubheadings(section) : section;
+    })
+    .join("");
+};
 const scoreIssues = (issues: RuleCheckResult[]) => Math.max(0, 100 - new Set(issues.map(x => x.id)).size * 5);
 const passesReview = (issues: RuleCheckResult[]) => scoreIssues(issues) >= 90 && !issues.some(x => x.severity === "critical");
 const fallbackReport = (input: ChildInput) => `**BÁO CÁO CAN THIỆP**
@@ -373,7 +452,8 @@ export async function runWorkflow(
           `REPORT_DATE: ${input.reportDate}\n\n### Dữ liệu đã phân tích\n\n${analysisMarkdown}\n\n### Mục tiêu đã chọn\n\n${goalsMarkdown}`,
           settings,
           signal,
-        );
+      );
+  report = enforceFixedReportSections(report, input, analysis);
   if (!isCompleteReportMarkdown(report))
     throw new Error("Model viết báo cáo không trả đủ cấu trúc Markdown I–VII.");
   const writerReport = isCompleteReportMarkdown(options.resume?.writerReportMarkdown)
@@ -406,7 +486,7 @@ export async function runWorkflow(
   for (let round = options.resume?.lastCompletedStep === "review" ? 0 : options.resume?.fixRoundCount ?? 0; round < 3; round++) {
     if (options.resume?.lastCompletedStep === "review" && round === 0) {
       step("fixer", "Đang sửa các lỗi được phát hiện");
-      report = await requestTargetedFix(report, issues);
+      report = enforceFixedReportSections(await requestTargetedFix(report, issues), input, analysis);
       checkpoint({ ...options.resume, lastCompletedStep: "fixer", analysisJson: analysis, analysisMarkdown, goalsJson: goals, goalsMarkdown, writerReportMarkdown: writerReport, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: 1 });
       options.resume = { ...options.resume, lastCompletedStep: "fixer", writerReportMarkdown: writerReport, reportMarkdown: report, fixRoundCount: 1 };
       continue;
@@ -434,7 +514,7 @@ export async function runWorkflow(
     if (passesReview(issues)) break;
     if (round === 2) break;
     step("fixer", "Đang sửa các lỗi được phát hiện");
-    report = await requestTargetedFix(report, issues);
+    report = enforceFixedReportSections(await requestTargetedFix(report, issues), input, analysis);
     checkpoint({ ...options.resume, lastCompletedStep: "fixer", analysisJson: analysis, analysisMarkdown, goalsJson: goals, goalsMarkdown, writerReportMarkdown: writerReport, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: round + 1 });
   }
   if (!isCompleteReportMarkdown(report))

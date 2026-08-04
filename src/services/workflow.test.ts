@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isCompleteReportMarkdown, parseGoalsMarkdown } from "./workflow";
+import { enforceFixedReportSections, isCompleteReportMarkdown, parseGoalsMarkdown } from "./workflow";
+import type { Analysis, ChildInput } from "../types";
+
+const fixedInput: ChildInput = { childName: "Nguyễn Văn A", birthDate: "01/01/2021", evaluator: "Cô B", reportDate: "2026-08-04", interventionPeople: "Giáo viên và gia đình", sourceData: "" };
+const fixedAnalysis: Analysis = { administrative: { childName: "Nguyễn Văn A", birthDate: "01/01/2021", evaluator: "Cô B", missingFields: [] }, domains: [], conflicts: [], missingData: [], goalCandidates: [] };
 
 describe("parseGoalsMarkdown", () => {
   it("accepts bold DeepSeek labels and full-width colons", () => {
@@ -100,5 +104,33 @@ describe("isCompleteReportMarkdown", () => {
           .join("\n"),
       ),
     ).toBe(true);
+  });
+});
+
+describe("report structure normalization", () => {
+  it("always restores fixed sections and public goal labels", () => {
+    const report = [
+      "**BÁO CÁO CAN THIỆP**",
+      "## I. THÔNG TIN HÀNH CHÍNH",
+      "- Thông tin phụ huynh: không được xuất",
+      "## II. HỆ THỐNG MÃ DỮ LIỆU VÀ QUY TẮC CHUNG",
+      "- nội dung do model tự viết",
+      "## III. CHỨC NĂNG HIỆN TẠI THEO TỪNG LĨNH VỰC",
+      "### Giao tiếp tiếp nhận",
+      "- kỹ năng",
+      "## IV. MỤC TIÊU CAN THIỆP",
+      "### Mục tiêu",
+      "- **Lĩnh vực nguồn:** nội bộ",
+      "- **Hành vi đích:** quan sát được",
+      "- **Baseline:** missing",
+    ].join("\n");
+    const normalized = enforceFixedReportSections(report, fixedInput, fixedAnalysis);
+    expect(normalized).toContain("- **Công cụ và nguồn dữ liệu:**");
+    expect(normalized).toContain("### 1. Giao tiếp tiếp nhận");
+    expect(normalized).toContain("### 1. Mục tiêu");
+    expect(normalized).toContain("Hành vi quan sát được");
+    expect(normalized).not.toContain("Thông tin phụ huynh");
+    expect(normalized).not.toContain("Lĩnh vực nguồn");
+    expect(normalized).not.toContain("Baseline");
   });
 });
