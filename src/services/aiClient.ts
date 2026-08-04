@@ -135,7 +135,12 @@ async function requestAi(
         body: JSON.stringify({
           model,
           messages: [
-            { role: "system", content: system },
+            {
+              role: "system",
+              content: system,
+              // OpenRouter/DeepSeek keeps this fixed system prompt in its prompt cache.
+              cache_control: { type: "ephemeral" },
+            },
             { role: "user", content: user },
           ],
           temperature: role === "writer" ? 0.45 : 0.15,
@@ -163,7 +168,30 @@ async function requestAi(
         model?: string;
         provider?: string;
         choices?: { message?: { content?: AiContent } }[];
+        usage?: {
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          total_tokens?: number;
+          prompt_tokens_details?: {
+            cached_tokens?: number;
+            cache_write_tokens?: number;
+          };
+        };
       };
+      if (import.meta.env.DEV) {
+        const usage = json.usage;
+        const cachedTokens = usage?.prompt_tokens_details?.cached_tokens ?? 0;
+        const promptTokens = usage?.prompt_tokens;
+        console.debug("Prompt cache usage", {
+          role,
+          model: json.model ?? model,
+          provider: json.provider,
+          cache_hit_tokens: cachedTokens,
+          cache_miss_tokens:
+            promptTokens === undefined ? undefined : Math.max(promptTokens - cachedTokens, 0),
+          cache_write_tokens: usage?.prompt_tokens_details?.cache_write_tokens ?? 0,
+        });
+      }
       const text = normalizeContent(json.choices?.[0]?.message?.content);
       if (!text) throw new AiError("format", "Dịch vụ trả về nội dung không đúng định dạng.");
       return { text, model: json.model ?? model, provider: json.provider };

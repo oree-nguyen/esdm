@@ -1,10 +1,10 @@
 import type { ModelRole } from "../types";
 export const MODEL_CONFIG: Record<ModelRole, string> = {
-  analyzer: "openai/gpt-oss-120b",
-  writer: "google/gemini-2.5-flash-lite",
-  reviewer: "google/gemini-2.5-flash-lite",
-  fixer: "deepseek/deepseek-v3.2",
+  analyzer: "deepseek/deepseek-v4-flash",
+  writer: "deepseek/deepseek-v4-flash",
+  reviewer: "deepseek/deepseek-v4-flash",
+  fixer: "deepseek/deepseek-v4-flash",
 };
-export const TEST_MODEL = "openai/gpt-oss-20b:free";
+export const TEST_MODE_MODEL = "deepseek/deepseek-v4-flash";
 export const resolveModel = (role: ModelRole, testMode: boolean) =>
-  testMode ? TEST_MODEL : MODEL_CONFIG[role];
+  testMode ? TEST_MODE_MODEL : MODEL_CONFIG[role];
