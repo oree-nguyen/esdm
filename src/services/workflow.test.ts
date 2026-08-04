@@ -54,11 +54,34 @@ describe("parseGoalsMarkdown", () => {
 ### 1. Chơi gọi tên đồ vật
 - Lĩnh vực liên quan: Giao tiếp diễn đạt
 - Mô tả hoạt động: Gia đình tạo cơ hội gọi tên đồ vật
+- Vì sao cần thiết: Bám mục tiêu giao tiếp
+### 2. Chờ lượt trong trò chơi
+- Lĩnh vực liên quan: Kỹ năng xã hội
+- Mô tả hoạt động: Gia đình tạo cơ hội chờ lượt
 - Vì sao cần thiết: Bám mục tiêu giao tiếp`);
 
     expect(result?.selectedGoals).toHaveLength(2);
     expect(result?.selectedGoals[0]).toMatchObject({ status: "no_candidate", topic: "Kỹ năng chơi – tương tác xã hội" });
     expect(result?.selectedGoals[1].domain).toBe("Giao tiếp diễn đạt");
+  });
+
+  it("does not parse family activities into selected goals", () => {
+    const result = parseGoalsMarkdown(`## MỤC TIÊU CÁ NHÂN
+### 1. Kỹ năng chơi – tương tác xã hội
+- Trạng thái: không có ứng viên phù hợp trong dữ liệu
+
+## MỤC TIÊU NHÓM
+### 1. Kỹ năng tự lập
+- Trạng thái: không có ứng viên phù hợp trong dữ liệu
+
+## HOẠT ĐỘNG GIA ĐÌNH
+### 1. Hoạt động một
+- Mô tả hoạt động: A
+### 2. Hoạt động hai
+- Mô tả hoạt động: B`);
+
+    expect(result?.selectedGoals).toHaveLength(2);
+    expect(result?.selectedGoals.every((goal) => !goal.topic?.startsWith("Hoạt động"))).toBe(true);
   });
 });
 

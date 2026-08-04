@@ -22,4 +22,8 @@ describe('rule engine',()=>{
   it('rejects a fourth group in section III',()=>expect(runRules(report('### Điểm mạnh\n### Đang hình thành\n### Ưu tiên phát triển\n### Cần quan sát thêm'),input,analysis,[]).find(x=>x.id===11)?.passed).toBe(false));
   it('rejects more than three priority skills in one domain',()=>expect(runRules(report('### Ưu tiên phát triển\n- a\n- b\n- c\n- d'),input,analysis,[]).find(x=>x.id===10)?.passed).toBe(false));
   it('rejects a goal section without the seven fixed topics and two family activities',()=>expect(runRules(report('', '### 1\n### 2\n### 3\n### 4\n### 5\n### 6\n### 7'),input,analysis,[]).find(x=>x.id===13)?.passed).toBe(false));
+  it('reports a missing topic when the parsed output contains only six goals',()=>{
+    const sixGoals=Array.from({length:6},(_,index)=>({...goal,id:`goal-${index+1}`}));
+    expect(runRules('',input,analysis,sixGoals).find(x=>x.id===13)?.passed).toBe(false);
+  });
 });

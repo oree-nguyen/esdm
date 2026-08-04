@@ -49,7 +49,7 @@ export function runRules(report:string,input:ChildInput,analysis:Analysis,goals:
     result(10,!report||prioritySkillCountValid(sectionIII),'Một lĩnh vực có hơn ba kỹ năng trong nhóm ưu tiên phát triển.'),
     result(11,!report||hasThreeGroupsOnly(sectionIII),'Mục III tạo nhóm thứ tư ngoài ba nhóm chính.'),
     result(12,usableGoals.every(g=>skills.some(s=>s.skill===g.sourceSkill&&(s.category==='emerging'||s.category==='priority'))),'Có mục tiêu không xuất phát từ nhóm hợp lệ.','critical'),
-    result(13,usableGoals.length<=7 && (!report||goalFrameValid(`${sectionIV}\n${sectionV}`)),'Khung mục tiêu phải có tối đa bảy mục tiêu hợp lệ và hai hoạt động gia đình.','critical'),
+    result(13,goals.length===7 && (!report||goalFrameValid(`${sectionIV}\n${sectionV}`)),'Khung mục tiêu phải có đúng bảy chủ đề (kể cả chủ đề no_candidate) và hai hoạt động gia đình.','critical'),
     result(14,usableGoals.every(g=>g.targetBehavior.trim().length>3),'Có mục tiêu thiếu hành vi đích.','critical'),
     result(15,usableGoals.every(g=>[g.duration,g.context,g.opportunityCondition,g.maxSupport,g.masteryCriterion].every(Boolean)&&g.contextsCount>0&&g.peopleCount>0&&g.consecutiveSessions>0),'Mục tiêu thiếu thành phần bắt buộc.'),
     result(16,!report||usableGoals.every(g=>(report.match(new RegExp(g.targetBehavior.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&'),'gi'))?.length??0)>=1),'Cần kiểm tra đúng hai hoạt động cho mỗi mục tiêu.'),
