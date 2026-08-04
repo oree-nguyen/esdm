@@ -43,6 +43,7 @@ const messageOf = (status: number) =>
     : status === 429 ? "Đã chạm giới hạn yêu cầu, vui lòng thử lại."
     : status === 404 ? "Mô hình không khả dụng."
     : "Không thể gọi dịch vụ AI.";
+const REQUEST_TIMEOUT_MS = 25_000;
 
 interface AiResponse { text: string; model: string; provider?: string }
 
@@ -55,9 +56,13 @@ async function requestAi(
   const url = settings.mode === "worker" ? settings.endpoint : `${settings.endpoint.replace(/\/$/, "")}/chat/completions`;
   const model = resolveModel(role, settings.testMode);
   for (let attempt = 0; attempt < 3; attempt++) {
+    const timeoutController = new AbortController();
+    const timer = window.setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS);
+    const abortFromUser = () => timeoutController.abort();
+    signal.addEventListener("abort", abortFromUser, { once: true });
     try {
       const response = await fetch(url, {
-        method: "POST", signal,
+        method: "POST", signal: timeoutController.signal,
         headers: { "Content-Type": "application/json", ...(settings.mode === "direct" ? { Authorization: `Bearer ${settings.apiKey}` } : {}) },
         body: JSON.stringify({
           model,
@@ -77,9 +82,14 @@ async function requestAi(
       if (!text) throw new AiError("format", "Dịch vụ trả về nội dung không đúng định dạng.");
       return { text, model: json.model ?? model, provider: json.provider };
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+      if (timeoutController.signal.aborted)
+        throw new AiError("network", "Không thể kết nối OpenRouter trong 25 giây. Hãy kiểm tra mạng, khóa API và địa chỉ API rồi thử lại.");
       if (error instanceof AiError) throw error;
       if (attempt === 2) throw new AiError("network", "Mất kết nối hoặc dịch vụ không phản hồi.");
+    } finally {
+      window.clearTimeout(timer);
+      signal.removeEventListener("abort", abortFromUser);
     }
   }
   throw new AiError("network", "Mất kết nối.");
