@@ -119,7 +119,6 @@ async function requestAi(
       : `${settings.endpoint.replace(/\/$/, "")}/chat/completions`;
   const model = resolveModel(role, settings.testMode);
 
-  let timeoutRetries = 0;
   for (let attempt = 0; attempt < MAX_REQUEST_ATTEMPTS; attempt++) {
     const timeoutController = new AbortController();
     const timer = window.setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS);
@@ -171,13 +170,9 @@ async function requestAi(
     } catch (error) {
       if (signal.aborted) throw new DOMException("Aborted", "AbortError");
       if (timeoutController.signal.aborted) {
-        if (timeoutRetries++ < 1 && attempt < MAX_REQUEST_ATTEMPTS - 1) {
-          await waitForRetry(2_000, signal);
-          continue;
-        }
         throw new AiError(
           "network",
-          `OpenRouter không phản hồi sau 120 giây và app đã thử kết nối lại. Model: ${model}. API: ${url}. Nếu OpenRouter Logs trống, request chưa tới OpenRouter; hãy kiểm tra mạng, khóa API, workspace và địa chỉ API.`,
+          `OpenRouter không phản hồi sau 120 giây. Model: ${model}. API: ${url}. Nếu OpenRouter Logs trống, request chưa tới OpenRouter; hãy kiểm tra mạng, khóa API, workspace và địa chỉ API.`,
         );
       }
       if (error instanceof AiError) throw error;
