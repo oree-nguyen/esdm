@@ -110,14 +110,39 @@ async function requestAi(
   settings: Settings,
   signal: AbortSignal,
 ): Promise<AiResponse> {
-  if (!settings.apiKey && settings.mode === "direct")
+  const apiKey = settings.apiKey.trim();
+  if (!apiKey && settings.mode === "direct")
     throw new AiError("key", "Hãy nhập khóa truy cập trong Cài đặt trước khi tạo báo cáo.");
+  if (settings.mode === "direct" && !apiKey.startsWith("sk-or-v1-"))
+    throw new AiError("key", "Khóa OpenRouter phải bắt đầu bằng sk-or-v1-.");
 
   const url =
     settings.mode === "worker"
       ? settings.endpoint
       : `${settings.endpoint.replace(/\/$/, "")}/chat/completions`;
   const model = resolveModel(role, settings.testMode);
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(settings.mode === "direct"
+      ? {
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer": window.location.origin,
+          "X-OpenRouter-Title": "Trợ lý Báo cáo Can thiệp",
+        }
+      : {}),
+  };
+
+  if (import.meta.env.DEV) {
+    console.debug("OpenRouter request", {
+      url,
+      model,
+      mode: settings.mode,
+      apiKeyPresent: Boolean(apiKey),
+      apiKeyHasOpenRouterPrefix: apiKey.startsWith("sk-or-v1-"),
+      authorization: headers.Authorization ? "Bearer [redacted]" : "missing",
+      headers: Object.keys(headers),
+    });
+  }
 
   for (let attempt = 0; attempt < MAX_REQUEST_ATTEMPTS; attempt++) {
     const timeoutController = new AbortController();
@@ -128,10 +153,7 @@ async function requestAi(
       const response = await fetch(url, {
         method: "POST",
         signal: timeoutController.signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...(settings.mode === "direct" ? { Authorization: `Bearer ${settings.apiKey}` } : {}),
-        },
+        headers,
         body: JSON.stringify({
           model,
           messages: [
