@@ -23,6 +23,7 @@ export function App() {
   const [session, setSession] = useState<ReportSession>(() => restored ?? createSession());
   const [sessions, setSessions] = useState(() => loadSessionIndex());
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(
     restored?.messages ?? saved.messages ?? [
       {
@@ -57,6 +58,7 @@ export function App() {
     const id = setInterval(() => setElapsed((x) => x + 1), 1000);
     return () => clearInterval(id);
   }, [working]);
+  useEffect(() => { document.documentElement.classList.toggle("dark", darkMode); }, [darkMode]);
   const say = (text: string, reportChip = false) =>
     setMessages((m) => [
       ...m,
@@ -187,6 +189,7 @@ export function App() {
         <button onClick={() => newChat()}>+ Cuộc trò chuyện mới</button>
         {sessions.map((item) => <div className="sessionItem" key={item.id}><button onClick={() => openSession(item.id)}><i className={item.status} />{item.childNameLabel || "Báo cáo chưa đặt tên"}<small>{new Date(item.createdAt).toLocaleString("vi-VN")}</small></button><button aria-label="Xóa phiên" onClick={() => { if(confirm("Xóa phiên này?")){ deleteSession(item.id); setSessions(loadSessionIndex()); if(item.id===session.id)newChat(); } }}>🗑</button></div>)}
       </nav>
+      {sidebarOpen && <button className="sidebarBackdrop" aria-label="Đóng lịch sử" onClick={() => setSidebarOpen(false)} />}
       <header>
         <div>
           <strong>{APP_NAME}</strong>
@@ -260,6 +263,9 @@ export function App() {
             <button onClick={() => navigator.clipboard.writeText(report)}>
               Sao chép
             </button>
+            <label>
+              <input type="checkbox" checked={darkMode} onChange={(e) => setDarkMode(e.target.checked)} /> Chế độ tối
+            </label>
             <label>
               <input
                 type="checkbox"
