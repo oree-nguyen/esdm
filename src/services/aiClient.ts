@@ -10,6 +10,9 @@ export class AiError extends Error {
 
 export type AiContent = string | { type?: string; text?: string }[] | undefined;
 
+// Fetch header values must not contain characters outside the ByteString range.
+export const OPENROUTER_APP_TITLE = "Tro ly Bao cao Can thiep";
+
 export const normalizeContent = (content: AiContent): string | undefined =>
   Array.isArray(content) ? content.map((part) => part.text ?? "").join("") : content;
 
@@ -127,7 +130,7 @@ async function requestAi(
       ? {
           Authorization: `Bearer ${apiKey}`,
           "HTTP-Referer": window.location.origin,
-          "X-OpenRouter-Title": "Trợ lý Báo cáo Can thiệp",
+          "X-OpenRouter-Title": OPENROUTER_APP_TITLE,
         }
       : {}),
   };

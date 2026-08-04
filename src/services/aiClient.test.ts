@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { extractJsonObject, normalizeContent } from "./aiClient";
+import { extractJsonObject, normalizeContent, OPENROUTER_APP_TITLE } from "./aiClient";
+
+describe("OpenRouter request headers", () => {
+  it("uses an ASCII-safe application title accepted by browser fetch", () => {
+    expect(OPENROUTER_APP_TITLE).toMatch(/^[\x20-\x7e]*$/);
+  });
+});
 
 describe("normalizeContent", () => {
   it("returns string content unchanged", () => {
