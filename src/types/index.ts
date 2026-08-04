@@ -13,6 +13,7 @@ export interface ChildInput {
 export type SkillCategory = "strength" | "emerging" | "priority" | "observe";
 export interface SkillItem {
   skill: string;
+  level?: 1 | 2 | 3 | 4;
   category: SkillCategory;
   evidence: string;
   supportLevel: string;
@@ -112,7 +113,7 @@ export interface StepEvent {
   status: "active" | "done" | "error";
 }
 export type WorkflowStep = "none" | "analysis" | "goalSelection" | "writer" | "review" | "fixer" | "done";
-export interface WorkflowCheckpoint { lastCompletedStep: WorkflowStep; analysisJson?: Analysis; goalsJson?: GoalDraft[]; writerReportMarkdown?: string; reportMarkdown?: string; reviewIssuesJson?: RuleCheckResult[]; fixRoundCount: number; }
+export interface WorkflowCheckpoint { lastCompletedStep: WorkflowStep; analysisJson?: Analysis; analysisMarkdown?: string; goalsJson?: GoalDraft[]; goalsMarkdown?: string; writerReportMarkdown?: string; reportMarkdown?: string; reviewMarkdown?: string; reviewIssuesJson?: RuleCheckResult[]; fixRoundCount: number; }
 export interface ReportSession { id: string; createdAt: number; updatedAt: number; childNameLabel?: string; sourceFileName?: string; reportDate?: string; batchId?: string; batchIndex?: number; batchTotal?: number; status: "in_progress" | "completed" | "stopped_missing_info" | "error"; rawInput: string; priorityDomains?: string[]; lastCompletedStep: WorkflowStep; stepOutputs: Omit<WorkflowCheckpoint, "lastCompletedStep">; stepTraceLog: { text: string; phase: string }[]; messages: ChatMessage[]; lastError?: string; }
 export interface SessionIndexItem { id: string; createdAt: number; updatedAt: number; childNameLabel?: string; status: ReportSession["status"] }
 export interface BatchRecord { batchId: string; sessionIds: string[]; createdAt: number; }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { askAi, askStructured } from "./aiClient";
+import { askAi, askStructured, askStructuredWithText } from "./aiClient";
 import {
   ANALYZER_PROMPT,
   FIXER_PROMPT,
@@ -142,18 +142,24 @@ const valueOf = (block: string, label: string) => {
 const parseAnalysisMarkdown = (markdown: string): Analysis | undefined => {
   const blocks=markdown.split(/^##\s+LĨNH VỰC:\s*/mi).slice(1); if(!blocks.length) return undefined;
   const admin=markdown.match(/##\s+THÔNG TIN HÀNH CHÍNH([\s\S]*?)(?=^##|$)/mi)?.[1] ?? "";
-  const domains=blocks.map(block=>{const [name,...lines]=block.split("\n");return {name:normalizeDomain(name),skills:lines.filter(line=>/^\s*-\s*\[/.test(line)).map(line=>{const match=line.match(/^\s*-\s*\[([^\]]*)\]\[([^\]]*)\]\s*(.*?)(?:\s+—\s*căn cứ:\s*(.*?))?(?:\s+—\s*hỗ trợ:\s*(.*?))?(?:\s+—\s*mâu thuẫn:\s*(có|không))?$/i);const kind=match?.[2]??"O";return {skill:match?.[3]??line.replace(/^\s*-\s*/,""),category:(kind.toUpperCase()==="S"?"strength":kind.toUpperCase()==="E"?"emerging":kind.toUpperCase()==="P"?"priority":"observe") as Analysis["domains"][number]["skills"][number]["category"],evidence:match?.[4]??"",supportLevel:match?.[5]??"",conflict:kind.toUpperCase()==="E"||match?.[6]?.toLowerCase()==="có",missingData:false}})}}).filter(d=>d.skills.length); if(!domains.length)return undefined;
+  const domains=blocks.map(block=>{const [name,...lines]=block.split("\n");return {name:normalizeDomain(name),skills:lines.filter(line=>/^\s*-\s*\[/.test(line)).map(line=>{const match=line.match(/^\s*-\s*\[([^\]]*)\]\[([^\]]*)\]\s*(.*?)(?:\s+—\s*căn cứ:\s*(.*?))?(?:\s+—\s*hỗ trợ:\s*(.*?))?(?:\s+—\s*mâu thuẫn:\s*(có|không))?$/i);const kind=match?.[2]??"O";const level=Number(match?.[1]);return {skill:match?.[3]??line.replace(/^\s*-\s*/,""),level:level >= 1 && level <= 4 ? level as 1|2|3|4 : undefined,category:(kind.toUpperCase()==="S"?"strength":kind.toUpperCase()==="E"?"emerging":kind.toUpperCase()==="P"?"priority":"observe") as Analysis["domains"][number]["skills"][number]["category"],evidence:match?.[4]??"",supportLevel:match?.[5]??"",conflict:kind.toUpperCase()==="E"||match?.[6]?.toLowerCase()==="có",missingData:false}})}}).filter(d=>d.skills.length); if(!domains.length)return undefined;
   return {administrative:{childName:valueOf(admin,"Tên trẻ"),birthDate:valueOf(admin,"Ngày sinh"),evaluator:valueOf(admin,"Người đánh giá"),missingFields:valueOf(admin,"Thiếu").split(",").map(x=>x.trim()).filter(Boolean)},domains,conflicts:[],missingData:[],goalCandidates:[]};
 };
 export const parseGoalsMarkdown = (markdown: string) => {
-  const blocks = markdown.split(/^###\s*\d+[.)]\s*/mi).slice(1);
+  const goalStart = markdown.search(/^##\s+MỤC TIÊU CÁ NHÂN/mi);
+  const familyStart = markdown.search(/^##\s+HOẠT ĐỘNG GIA ĐÌNH/mi);
+  const notSelectedStart = markdown.search(/^##\s+KHÔNG CHỌN/mi);
+  const endCandidates = [familyStart, notSelectedStart].filter((index) => index > goalStart);
+  const relevant = goalStart >= 0
+    ? markdown.slice(goalStart, endCandidates.length ? Math.min(...endCandidates) : undefined)
+    : markdown;
+  const blocks = relevant.split(/^###\s*\d+[.)]\s*/mi).slice(1);
   if (!blocks.length) return undefined;
-  const selectedGoals = blocks.map((block, index) => {
-    const [domain] = block.split("\n");
+  const selectedGoals = blocks.filter((block) => !/Trạng thái\s*:\s*không có ứng viên/i.test(block)).map((block, index) => {
     const baseline = valueOf(block, "Baseline");
     return {
       id: `goal-${index + 1}`,
-      domain: normalizeDomain(domain),
+      domain: normalizeDomain(valueOf(block, "Lĩnh vực nguồn") || valueOf(block, "Lĩnh vực")),
       sourceSkill: valueOf(block, "Kỹ năng nguồn"),
       targetBehavior: valueOf(block, "Hành vi đích"),
       duration: valueOf(block, "Thời gian dự kiến"),
@@ -209,6 +215,10 @@ const hasEssentialGoalContent = (goal: GoalDraft) =>
     goal.maxSupport,
     goal.masteryCriterion,
   ].every((value) => value.trim().length > 0);
+const issueListMarkdown = (issues: RuleCheckResult[]) =>
+  issues.map((issue) =>
+    `- [${issue.id}][${issue.severity}][${issue.section ?? ""}] vấn đề: ${issue.message} — căn cứ: ${issue.title} — cách sửa: ${issue.suggestedFix ?? issue.message}`,
+  ).join("\n");
 const mergeSections = (report: string, replacement: string) => {
   const changed = new Map(reportSections(replacement).map(section => [section.match(/^##\s+(.+)$/m)?.[1]?.trim(), section]));
   return reportSections(report).map(section => changed.get(section.match(/^##\s+(.+)$/m)?.[1]?.trim()) ?? section).join("");
@@ -276,8 +286,12 @@ export async function runWorkflow(
     }, 3000);
   };
   step("analyzer", "Đang đọc dữ liệu đánh giá của trẻ");
-  const analysis = options.resume?.analysisJson ?? await askStructured<Analysis>("analyzer", ANALYZER_PROMPT, input.sourceData, parseAnalysisMarkdown, "## THÔNG TIN HÀNH CHÍNH", "## THÔNG TIN HÀNH CHÍNH\n## LĨNH VỰC: <tên>", settings, signal);
-  checkpoint({ ...options.resume, lastCompletedStep: "analysis", analysisJson: analysis, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
+  const analysisResult = options.resume?.analysisJson
+    ? { value: options.resume.analysisJson, text: options.resume.analysisMarkdown ?? JSON.stringify(options.resume.analysisJson) }
+    : await askStructuredWithText<Analysis>("analyzer", ANALYZER_PROMPT, input.sourceData, parseAnalysisMarkdown, "## THÔNG TIN HÀNH CHÍNH", "## THÔNG TIN HÀNH CHÍNH\n## LĨNH VỰC: <tên>", settings, signal);
+  const analysis = analysisResult.value;
+  const analysisMarkdown = analysisResult.text;
+  checkpoint({ ...options.resume, lastCompletedStep: "analysis", analysisJson: analysis, analysisMarkdown, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
   step("ruleEngineAnalysis", "Đang kiểm tra dữ liệu phân tích theo quy tắc");
   input = {
     ...input,
@@ -285,24 +299,31 @@ export async function runWorkflow(
     birthDate: analysis.administrative.birthDate || input.birthDate,
     evaluator: analysis.administrative.evaluator || input.evaluator,
   };
+  const missingEssential = [
+    !input.childName.trim() && "tên trẻ",
+    !String(input.birthDate ?? "").trim() && "ngày sinh",
+  ].filter(Boolean);
+  if (missingEssential.length)
+    throw new Error(`Dữ liệu bạn cung cấp chưa có ${missingEssential.join(" và ")}. Vui lòng bổ sung rồi gửi lại.`);
   step("goalSelection", "Đang chọn mục tiêu can thiệp phù hợp");
   const savedGoals = options.resume?.goalsJson?.filter(hasEssentialGoalContent);
-  const goalsResult = savedGoals?.length ? { selectedGoals: savedGoals } : await askStructured(
+  const goalsResult = savedGoals?.length ? { value: { selectedGoals: savedGoals }, text: options.resume?.goalsMarkdown ?? JSON.stringify({ selectedGoals: savedGoals }) } : await askStructuredWithText(
     "analyzer",
     GOALS_PROMPT,
-    JSON.stringify({ analysis, priorityDomains: input.priorityDomains ?? [] }),
+    `### Dữ liệu đã phân tích\n\n${analysisMarkdown}\n\n### Lĩnh vực người dùng ưu tiên\n\n${(input.priorityDomains ?? []).join(", ") || "Không có"}`,
     parseGoalsMarkdown,
-    "## MỤC TIÊU ĐÃ CHỌN",
-    "## MỤC TIÊU ĐÃ CHỌN\n### 1. <lĩnh vực>",
+    "## MỤC TIÊU CÁ NHÂN",
+    "## MỤC TIÊU CÁ NHÂN\n### 1. Kỹ năng chơi – tương tác xã hội\n- Lĩnh vực nguồn: <tên>\n- Kỹ năng nguồn: <kỹ năng>\n- Hành vi đích: <hành vi>",
     settings,
     signal,
   );
+  const goalsMarkdown = goalsResult.text;
   const eligibleSkills = analysis.domains.flatMap((entry) =>
     entry.skills
       .filter((skill) => skill.category === "emerging" || skill.category === "priority")
       .map((skill) => ({ domain: entry.name, skill: skill.skill })),
   );
-  const goals: GoalDraft[] = goalsResult.selectedGoals.map((goal, index) => {
+  const goals: GoalDraft[] = goalsResult.value.selectedGoals.map((goal, index) => {
     const requested = comparableSkill(goal.sourceSkill);
     const source = eligibleSkills.find((candidate) => {
       const available = comparableSkill(candidate.skill);
@@ -323,7 +344,7 @@ export async function runWorkflow(
         .map((x) => x.message)
         .join(" "),
     );
-  checkpoint({ ...options.resume, lastCompletedStep: "goalSelection", analysisJson: analysis, goalsJson: goals, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
+  checkpoint({ ...options.resume, lastCompletedStep: "goalSelection", analysisJson: analysis, analysisMarkdown, goalsJson: goals, goalsMarkdown, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
   step("writer", "Đang viết báo cáo chức năng hiện tại");
   let report = isCompleteReportMarkdown(options.resume?.reportMarkdown)
     ? options.resume!.reportMarkdown!
@@ -332,7 +353,7 @@ export async function runWorkflow(
       : await askAi(
           "writer",
           WRITER_PROMPT,
-          JSON.stringify({ input, analysis, goals }),
+          `REPORT_DATE: ${input.reportDate}\n\n### Dữ liệu đã phân tích\n\n${analysisMarkdown}\n\n### Mục tiêu đã chọn\n\n${goalsMarkdown}`,
           settings,
           signal,
         );
@@ -341,7 +362,7 @@ export async function runWorkflow(
   const writerReport = isCompleteReportMarkdown(options.resume?.writerReportMarkdown)
     ? options.resume!.writerReportMarkdown!
     : report;
-  checkpoint({ ...options.resume, lastCompletedStep: "writer", analysisJson: analysis, goalsJson: goals, writerReportMarkdown: writerReport, reportMarkdown: report, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
+  checkpoint({ ...options.resume, lastCompletedStep: "writer", analysisJson: analysis, analysisMarkdown, goalsJson: goals, goalsMarkdown, writerReportMarkdown: writerReport, reportMarkdown: report, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
   const requestTargetedFix = async (currentReport: string, currentIssues: RuleCheckResult[]) => {
     const sectionsToFix = reportSections(currentReport).filter((section) => {
       const heading = section.match(/^##\s+(.+)$/m)?.[1] ?? "";
@@ -351,7 +372,7 @@ export async function runWorkflow(
     const fixedSections = await askAi(
       "fixer",
       FIXER_PROMPT,
-      `BÁO CÁO MARKDOWN CẦN SỬA:\n\n${contextSlice}\n\nDANH SÁCH LỖI CẦN SỬA:\n${JSON.stringify(currentIssues, null, 2)}`,
+      `### Ngữ cảnh liên quan\n\n${contextSlice}\n\n### Danh sách lỗi cần sửa\n\n${issueListMarkdown(currentIssues)}\n\n### Các mục cần sửa\n\n${contextSlice}`,
       settings,
       signal,
     );
@@ -369,16 +390,16 @@ export async function runWorkflow(
     if (options.resume?.lastCompletedStep === "review" && round === 0) {
       step("fixer", "Đang sửa các lỗi được phát hiện");
       report = await requestTargetedFix(report, issues);
-      checkpoint({ ...options.resume, lastCompletedStep: "fixer", analysisJson: analysis, goalsJson: goals, writerReportMarkdown: writerReport, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: 1 });
+      checkpoint({ ...options.resume, lastCompletedStep: "fixer", analysisJson: analysis, analysisMarkdown, goalsJson: goals, goalsMarkdown, writerReportMarkdown: writerReport, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: 1 });
       options.resume = { ...options.resume, lastCompletedStep: "fixer", writerReportMarkdown: writerReport, reportMarkdown: report, fixRoundCount: 1 };
       continue;
     }
     step("reviewer", "Đang kiểm tra báo cáo theo 20 tiêu chí");
-    const [review, rules] = await Promise.all([
-      askStructured(
+    const [reviewResult, rules] = await Promise.all([
+      askStructuredWithText(
         "reviewer",
         REVIEWER_PROMPT,
-        JSON.stringify({ report, analysis, goals }),
+        `### Dữ liệu phân tích\n\n${analysisMarkdown}\n\n### Mục tiêu đã chọn\n\n${goalsMarkdown}\n\n### Báo cáo cần kiểm tra\n\n${report}`,
         parseReviewMarkdown,
         "score:",
         "score: <0-100>\n## LỖI",
@@ -387,21 +408,22 @@ export async function runWorkflow(
       ),
       Promise.resolve(runRules(report, input, analysis, goals)),
     ]);
+    const review = reviewResult.value;
     issues = [
       ...rules,
       ...review.issues.map((x) => ({ id: x.criterionId, title: `Tiêu chí ${x.criterionId}`, passed: false, severity: x.severity, message: x.problem, section: x.section, suggestedFix: x.suggestedFix, source: "reviewer" as const })),
     ].filter((x) => !x.passed);
-    checkpoint({ ...options.resume, lastCompletedStep: "review", analysisJson: analysis, goalsJson: goals, writerReportMarkdown: writerReport, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: round });
+    checkpoint({ ...options.resume, lastCompletedStep: "review", analysisJson: analysis, analysisMarkdown, goalsJson: goals, goalsMarkdown, writerReportMarkdown: writerReport, reportMarkdown: report, reviewMarkdown: reviewResult.text, reviewIssuesJson: issues, fixRoundCount: round });
     if (passesReview(issues)) break;
     if (round === 2) break;
     step("fixer", "Đang sửa các lỗi được phát hiện");
     report = await requestTargetedFix(report, issues);
-    checkpoint({ ...options.resume, lastCompletedStep: "fixer", analysisJson: analysis, goalsJson: goals, writerReportMarkdown: writerReport, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: round + 1 });
+    checkpoint({ ...options.resume, lastCompletedStep: "fixer", analysisJson: analysis, analysisMarkdown, goalsJson: goals, goalsMarkdown, writerReportMarkdown: writerReport, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: round + 1 });
   }
   if (!isCompleteReportMarkdown(report))
     throw new Error("Báo cáo cuối không đủ cấu trúc Markdown I–VII.");
   step("done", "Đã xử lý xong");
   finishActive();
-  checkpoint({ ...options.resume, lastCompletedStep: "done", analysisJson: analysis, goalsJson: goals, writerReportMarkdown: writerReport, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
+  checkpoint({ ...options.resume, lastCompletedStep: "done", analysisJson: analysis, analysisMarkdown, goalsJson: goals, goalsMarkdown, writerReportMarkdown: writerReport, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
   return { report, goals, issues, childName: input.childName };
 }

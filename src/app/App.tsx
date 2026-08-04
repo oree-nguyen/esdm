@@ -34,9 +34,12 @@ const createSession = (rawInput = "", sourceFileName?: string): ReportSession =>
 
 const checkpointOutputs = (checkpoint: WorkflowCheckpoint): ReportSession["stepOutputs"] => ({
   analysisJson: checkpoint.analysisJson,
+  analysisMarkdown: checkpoint.analysisMarkdown,
   goalsJson: checkpoint.goalsJson,
+  goalsMarkdown: checkpoint.goalsMarkdown,
   writerReportMarkdown: checkpoint.writerReportMarkdown,
   reportMarkdown: checkpoint.reportMarkdown,
+  reviewMarkdown: checkpoint.reviewMarkdown,
   reviewIssuesJson: checkpoint.reviewIssuesJson,
   fixRoundCount: checkpoint.fixRoundCount,
 });

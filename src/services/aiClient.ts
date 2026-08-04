@@ -363,11 +363,25 @@ export async function askStructured<T>(
   settings: Settings,
   signal: AbortSignal,
 ): Promise<T> {
+  return (await askStructuredWithText(role, system, user, parse, startMarker, expectedFormat, settings, signal)).value;
+}
+
+export async function askStructuredWithText<T>(
+  role: ModelRole,
+  system: string,
+  user: string,
+  parse: (text: string) => T | undefined,
+  startMarker: string,
+  expectedFormat: string,
+  settings: Settings,
+  signal: AbortSignal,
+): Promise<{ value: T; text: string }> {
   let response = await requestAi(role, system, user, settings, signal);
   for (let repair = 0; repair < 2; repair++) {
     const start = response.text.indexOf(startMarker);
-    const parsed = start >= 0 ? parse(response.text.slice(start)) : undefined;
-    if (parsed !== undefined) return parsed;
+    const text = start >= 0 ? response.text.slice(start) : response.text;
+    const parsed = start >= 0 ? parse(text) : undefined;
+    if (parsed !== undefined) return { value: parsed, text };
     if (import.meta.env.DEV)
       console.debug("Invalid structured response", {
         role,
