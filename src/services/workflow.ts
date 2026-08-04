@@ -111,9 +111,13 @@ const category = (value: unknown): Analysis["domains"][number]["skills"][number]
   return "observe";
 };
 const normalizeDomain = (value: unknown) => {
-  const raw = text(value).trim();
+  const raw = text(value).trim().replace(/^lĩnh vực\s*[:：-]\s*/i, "");
   const head = raw.split(":")[0].trim();
-  return DOMAIN_LIST.find(name => head === name || head.startsWith(name) || name.startsWith(head)) ?? raw;
+  const folded = head.toLocaleLowerCase("vi");
+  return DOMAIN_LIST.find(name => {
+    const candidate = name.toLocaleLowerCase("vi");
+    return folded === candidate || folded.startsWith(candidate) || candidate.startsWith(folded);
+  }) ?? raw;
 };
 const normalizeAnalysis = (value: unknown): Analysis | undefined => {
   const root=record(value), rawDomains=list(root?.domains ?? root?.domain ?? root?.lĩnhVực);
@@ -126,16 +130,67 @@ const normalizeAnalysis = (value: unknown): Analysis | undefined => {
 };
 const normalizeGoals = (value: unknown) => { const root=record(value); const raw=list(root?.selectedGoals ?? root?.goals ?? root?.selected); if (!raw) return undefined; const selectedGoals=raw.map((x,index)=>{const g=record(x) ?? {};return {id:`goal-${index+1}`,domain:text(g.domain ?? g.name),sourceSkill:text(g.sourceSkill ?? g.skill),targetBehavior:text(g.targetBehavior ?? g.behavior ?? g.target),duration:text(g.duration),context:text(g.context),opportunityCondition:text(g.opportunityCondition ?? g.opportunities),maxSupport:text(g.maxSupport ?? g.support),masteryCriterion:text(g.masteryCriterion ?? g.criterion),contextsCount:Number(g.contextsCount) || 1,peopleCount:Number(g.peopleCount) || 1,consecutiveSessions:Number(g.consecutiveSessions) || 1,baselineStatus:text(g.baselineStatus)==="available" ? "available" as const : "missing" as const,baselineEvidence:text(g.baselineEvidence)}}); return {selectedGoals,notSelected:(list(root?.notSelected ?? root?.unselected) ?? []).map(x=>{const g=record(x)??{};return {sourceSkill:text(g.sourceSkill ?? g.skill),reason:text(g.reason)}})}; };
 const normalizeReview = (value: unknown) => { const root=record(value); const raw=list(root?.issues ?? root?.errors ?? root?.findings); if (!raw) return undefined; return {issues:raw.map((x,index)=>{const r=record(x)??{};const severity=text(r.severity).toLowerCase();return {criterionId:Number(r.criterionId ?? r.id) || index+1,severity:(severity==="critical"||severity==="format" ? severity : "warning") as "critical"|"warning"|"format",section:text(r.section ?? r.location),problem:text(r.problem ?? r.message ?? r.title),evidence:text(r.evidence),suggestedFix:text(r.suggestedFix ?? r.fix)}})}; };
-const valueOf = (block: string, label: string) => block.match(new RegExp(`^- ${label}:\\s*(.*)$`, "mi"))?.[1]?.trim() ?? "";
+const valueOf = (block: string, label: string) => {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return block.match(
+    new RegExp(
+      `^\\s*(?:[-*●]\\s*)?(?:\\*\\*)?${escaped}\\s*[:：](?:\\*\\*)?\\s*(.*?)\\s*$`,
+      "mi",
+    ),
+  )?.[1]?.replace(/\*\*$/, "").trim() ?? "";
+};
 const parseAnalysisMarkdown = (markdown: string): Analysis | undefined => {
   const blocks=markdown.split(/^##\s+LĨNH VỰC:\s*/mi).slice(1); if(!blocks.length) return undefined;
   const admin=markdown.match(/##\s+THÔNG TIN HÀNH CHÍNH([\s\S]*?)(?=^##|$)/mi)?.[1] ?? "";
   const domains=blocks.map(block=>{const [name,...lines]=block.split("\n");return {name:normalizeDomain(name),skills:lines.filter(line=>/^\s*-\s*\[/.test(line)).map(line=>{const match=line.match(/^\s*-\s*\[([^\]]*)\]\[([^\]]*)\]\s*(.*?)(?:\s+—\s*căn cứ:\s*(.*?))?(?:\s+—\s*hỗ trợ:\s*(.*?))?(?:\s+—\s*mâu thuẫn:\s*(có|không))?$/i);const kind=match?.[2]??"O";return {skill:match?.[3]??line.replace(/^\s*-\s*/,""),category:(kind.toUpperCase()==="S"?"strength":kind.toUpperCase()==="E"?"emerging":kind.toUpperCase()==="P"?"priority":"observe") as Analysis["domains"][number]["skills"][number]["category"],evidence:match?.[4]??"",supportLevel:match?.[5]??"",conflict:kind.toUpperCase()==="E"||match?.[6]?.toLowerCase()==="có",missingData:false}})}}).filter(d=>d.skills.length); if(!domains.length)return undefined;
   return {administrative:{childName:valueOf(admin,"Tên trẻ"),birthDate:valueOf(admin,"Ngày sinh"),evaluator:valueOf(admin,"Người đánh giá"),missingFields:valueOf(admin,"Thiếu").split(",").map(x=>x.trim()).filter(Boolean)},domains,conflicts:[],missingData:[],goalCandidates:[]};
 };
-const parseGoalsMarkdown = (markdown: string) => { const blocks=markdown.split(/^###\s*\d+\.\s*/mi).slice(1); if(!blocks.length)return undefined; return {selectedGoals:blocks.map((block,index)=>{const [domain]=block.split("\n");const baseline=valueOf(block,"Baseline");return {id:`goal-${index+1}`,domain:normalizeDomain(domain),sourceSkill:valueOf(block,"Kỹ năng nguồn"),targetBehavior:valueOf(block,"Hành vi đích"),duration:valueOf(block,"Thời gian dự kiến"),context:valueOf(block,"Bối cảnh thực hiện"),opportunityCondition:valueOf(block,"Điều kiện tạo cơ hội"),maxSupport:valueOf(block,"Mức hỗ trợ tối đa"),masteryCriterion:valueOf(block,"Tiêu chí đạt"),contextsCount:Number(valueOf(block,"Số bối cảnh áp dụng"))||1,peopleCount:Number(valueOf(block,"Số người khác nhau"))||1,consecutiveSessions:Number(valueOf(block,"Số buổi liên tiếp"))||1,baselineStatus:baseline.toLowerCase().startsWith("available")?"available" as const:"missing" as const,baselineEvidence:baseline.split("—")[1]?.replace(/^\s*căn cứ:\s*/i,"")??""}}),notSelected:[]}; };
+export const parseGoalsMarkdown = (markdown: string) => {
+  const blocks = markdown.split(/^###\s*\d+[.)]\s*/mi).slice(1);
+  if (!blocks.length) return undefined;
+  const selectedGoals = blocks.map((block, index) => {
+    const [domain] = block.split("\n");
+    const baseline = valueOf(block, "Baseline");
+    return {
+      id: `goal-${index + 1}`,
+      domain: normalizeDomain(domain),
+      sourceSkill: valueOf(block, "Kỹ năng nguồn"),
+      targetBehavior: valueOf(block, "Hành vi đích"),
+      duration: valueOf(block, "Thời gian dự kiến"),
+      context: valueOf(block, "Bối cảnh thực hiện"),
+      opportunityCondition: valueOf(block, "Điều kiện tạo cơ hội"),
+      maxSupport: valueOf(block, "Mức hỗ trợ tối đa"),
+      masteryCriterion: valueOf(block, "Tiêu chí đạt"),
+      contextsCount: Number(valueOf(block, "Số bối cảnh áp dụng")) || 1,
+      peopleCount: Number(valueOf(block, "Số người khác nhau")) || 1,
+      consecutiveSessions: Number(valueOf(block, "Số buổi liên tiếp")) || 1,
+      baselineStatus: baseline.toLowerCase().startsWith("available") ? "available" as const : "missing" as const,
+      baselineEvidence: baseline.split("—")[1]?.replace(/^\s*căn cứ:\s*/i, "") ?? "",
+    };
+  });
+  const hasMissingEssentialContent = selectedGoals.some((goal) =>
+    [
+      goal.domain,
+      goal.sourceSkill,
+      goal.targetBehavior,
+      goal.duration,
+      goal.context,
+      goal.opportunityCondition,
+      goal.maxSupport,
+      goal.masteryCriterion,
+    ].some((value) => !value.trim()),
+  );
+  if (!selectedGoals.length || hasMissingEssentialContent) return undefined;
+  return { selectedGoals, notSelected: [] };
+};
 const parseReviewMarkdown = (markdown: string) => { const issueLines=markdown.match(/^\s*-\s*\[(\d+)\]\[(critical|warning|format)\]\[([^\]]+)\]\s*vấn đề:\s*(.*?)\s*—\s*căn cứ:\s*(.*?)\s*—\s*cách sửa:\s*(.*)$/gmi); if(!issueLines && !/^##\s+LỖI/m.test(markdown))return undefined; return {issues:(issueLines??[]).map(line=>{const m=line.match(/^\s*-\s*\[(\d+)\]\[(critical|warning|format)\]\[([^\]]+)\]\s*vấn đề:\s*(.*?)\s*—\s*căn cứ:\s*(.*?)\s*—\s*cách sửa:\s*(.*)$/i)!;return {criterionId:Number(m[1]),severity:m[2] as "critical"|"warning"|"format",section:m[3],problem:m[4],evidence:m[5],suggestedFix:m[6]}})}; };
 const reportSections = (report: string) => report.split(/(?=^##\s+)/m).filter(Boolean);
+const comparableSkill = (value: string) =>
+  value
+    .normalize("NFC")
+    .toLocaleLowerCase("vi")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
 const mergeSections = (report: string, replacement: string) => {
   const changed = new Map(reportSections(replacement).map(section => [section.match(/^##\s+(.+)$/m)?.[1]?.trim(), section]));
   return reportSections(report).map(section => changed.get(section.match(/^##\s+(.+)$/m)?.[1]?.trim()) ?? section).join("");
@@ -223,10 +278,24 @@ export async function runWorkflow(
     settings,
     signal,
   );
-  const goals: GoalDraft[] = goalsResult.selectedGoals.map((goal, index) => ({
-    ...goal,
-    id: `goal-${index + 1}`,
-  }));
+  const eligibleSkills = analysis.domains.flatMap((entry) =>
+    entry.skills
+      .filter((skill) => skill.category === "emerging" || skill.category === "priority")
+      .map((skill) => ({ domain: entry.name, skill: skill.skill })),
+  );
+  const goals: GoalDraft[] = goalsResult.selectedGoals.map((goal, index) => {
+    const requested = comparableSkill(goal.sourceSkill);
+    const source = eligibleSkills.find((candidate) => {
+      const available = comparableSkill(candidate.skill);
+      return available === requested || available.includes(requested) || requested.includes(available);
+    });
+    return {
+      ...goal,
+      id: `goal-${index + 1}`,
+      domain: source?.domain ?? goal.domain,
+      sourceSkill: source?.skill ?? goal.sourceSkill,
+    };
+  });
   checkpoint({ ...options.resume, lastCompletedStep: "goalSelection", analysisJson: analysis, goalsJson: goals, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
   const pre = runRules("", input, analysis, goals);
   if (pre.some((x) => !x.passed && x.severity === "critical"))
