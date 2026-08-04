@@ -77,8 +77,10 @@ const safeFilePart = (value: string) => value
   .trim() || "bao-cao";
 
 const readAutoDownload = () => {
-  try { return localStorage.getItem("settings:autoDownload") === "true"; }
-  catch { return false; }
+  try {
+    const stored = localStorage.getItem("settings:autoDownload");
+    return stored === null ? true : stored === "true";
+  } catch { return true; }
 };
 
 export function App() {
