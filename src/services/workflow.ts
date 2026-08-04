@@ -121,6 +121,13 @@ const normalizeAnalysis = (value: unknown): Analysis | undefined => {
 };
 const normalizeGoals = (value: unknown) => { const root=record(value); const raw=list(root?.selectedGoals ?? root?.goals ?? root?.selected); if (!raw) return undefined; const selectedGoals=raw.map((x,index)=>{const g=record(x) ?? {};return {id:`goal-${index+1}`,domain:text(g.domain ?? g.name),sourceSkill:text(g.sourceSkill ?? g.skill),targetBehavior:text(g.targetBehavior ?? g.behavior ?? g.target),duration:text(g.duration),context:text(g.context),opportunityCondition:text(g.opportunityCondition ?? g.opportunities),maxSupport:text(g.maxSupport ?? g.support),masteryCriterion:text(g.masteryCriterion ?? g.criterion),contextsCount:Number(g.contextsCount) || 1,peopleCount:Number(g.peopleCount) || 1,consecutiveSessions:Number(g.consecutiveSessions) || 1,baselineStatus:text(g.baselineStatus)==="available" ? "available" as const : "missing" as const,baselineEvidence:text(g.baselineEvidence)}}); return {selectedGoals,notSelected:(list(root?.notSelected ?? root?.unselected) ?? []).map(x=>{const g=record(x)??{};return {sourceSkill:text(g.sourceSkill ?? g.skill),reason:text(g.reason)}})}; };
 const normalizeReview = (value: unknown) => { const root=record(value); const raw=list(root?.issues ?? root?.errors ?? root?.findings); if (!raw) return undefined; return {issues:raw.map((x,index)=>{const r=record(x)??{};const severity=text(r.severity).toLowerCase();return {criterionId:Number(r.criterionId ?? r.id) || index+1,severity:(severity==="critical"||severity==="format" ? severity : "warning") as "critical"|"warning"|"format",section:text(r.section ?? r.location),problem:text(r.problem ?? r.message ?? r.title),evidence:text(r.evidence),suggestedFix:text(r.suggestedFix ?? r.fix)}})}; };
+const reportSections = (report: string) => report.split(/(?=^##\s+)/m).filter(Boolean);
+const mergeSections = (report: string, replacement: string) => {
+  const changed = new Map(reportSections(replacement).map(section => [section.match(/^##\s+(.+)$/m)?.[1]?.trim(), section]));
+  return reportSections(report).map(section => changed.get(section.match(/^##\s+(.+)$/m)?.[1]?.trim()) ?? section).join("");
+};
+const scoreIssues = (issues: RuleCheckResult[]) => Math.max(0, 100 - new Set(issues.map(x => x.id)).size * 5);
+const passesReview = (issues: RuleCheckResult[]) => scoreIssues(issues) >= 90 && !issues.some(x => x.severity === "critical");
 const fallbackReport = (input: ChildInput) => `**BÁO CÁO CAN THIỆP**
 
 ## I. THÔNG TIN HÀNH CHÍNH
@@ -263,16 +270,22 @@ export async function runWorkflow(
       ...review.issues.map((x) => ({ id: x.criterionId, title: `Tiêu chí ${x.criterionId}`, passed: false, severity: x.severity, message: x.problem, section: x.section, suggestedFix: x.suggestedFix, source: "reviewer" as const })),
     ].filter((x) => !x.passed);
     checkpoint({ ...options.resume, lastCompletedStep: "review", analysisJson: analysis, goalsJson: goals, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: round });
-    if (!issues.length) break;
+    if (passesReview(issues)) break;
     if (round === 2) break;
     step("fixer", "Đang sửa các lỗi được phát hiện");
-    report = await askAi(
+    const sectionsToFix = reportSections(report).filter(section => {
+      const heading = section.match(/^##\s+(.+)$/m)?.[1] ?? "";
+      return issues.some(issue => issue.section && heading.includes(issue.section));
+    });
+    const contextSlice = sectionsToFix.length ? sectionsToFix.join("") : report;
+    const fixedSections = await askAi(
       "fixer",
       FIXER_PROMPT,
-      JSON.stringify({ report, issues }),
+      JSON.stringify({ contextSlice, sectionsToFix: sectionsToFix.map(section => section.match(/^##\s+(.+)$/m)?.[1]), issues }),
       settings,
       signal,
     );
+    report = sectionsToFix.length ? mergeSections(report, fixedSections) : fixedSections;
     checkpoint({ ...options.resume, lastCompletedStep: "fixer", analysisJson: analysis, goalsJson: goals, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: round + 1 });
   }
   step("done", "Đã xử lý xong");
