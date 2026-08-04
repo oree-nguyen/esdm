@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import mammoth from "mammoth";
-import { APP_NAME, DEFAULT_SETTINGS, MAX_SOURCE_CHARS } from "../config/app";
+import { APP_NAME, DEFAULT_SETTINGS } from "../config/app";
 import { downloadDocx, downloadMarkdown } from "../export/files";
 import { runWorkflow } from "../services/workflow";
 import { StepTraceStatus } from "../components/chat/StepTraceStatus";
@@ -116,10 +116,6 @@ export function App() {
       say(
         `Để bắt đầu, vui lòng bổ sung: ${missing.length ? missing.join(", ") : "dữ liệu nguồn chi tiết hơn"}.`,
       );
-      return;
-    }
-    if (text.length > MAX_SOURCE_CHARS) {
-      say("Dữ liệu quá dài. Vui lòng rút gọn còn dưới 30.000 ký tự.");
       return;
     }
     const input: ChildInput = {
