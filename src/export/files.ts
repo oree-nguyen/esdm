@@ -35,8 +35,21 @@ const normalizedDate = (value?: string) => {
   const date = value?.trim() || new Date().toLocaleDateString('vi-VN');
   const iso = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (iso) return `${iso[3]}-${iso[2]}-${iso[1]}`;
+  const local = date.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (local) return `${local[1].padStart(2, '0')}-${local[2].padStart(2, '0')}-${local[3]}`;
   return date.replace(/\//g, '-');
 };
+
+export function resolveSessionChildName(session: ReportSession) {
+  const direct = session.childNameLabel?.trim();
+  if (direct) return direct;
+  const analyzed = session.stepOutputs.analysisJson?.administrative.childName?.trim();
+  if (analyzed) return analyzed;
+  const report = session.stepOutputs.reportMarkdown || session.stepOutputs.writerReportMarkdown || '';
+  const line = report.match(/^\s*(?:[-*●]\s*)?(?:\*\*)?(?:Họ\s+và\s+tên\s+trẻ|Tên\s+trẻ)\s*[:：]\s*(?:\*\*)?\s*(.+?)\s*$/im)?.[1];
+  const fromReport = line?.replace(/\*\*/g, '').trim();
+  return fromReport || '';
+}
 
 const normalizedChildName = (value?: string) => (value?.trim() || 'Khong ro ten')
   .normalize('NFD')
@@ -47,12 +60,13 @@ const normalizedChildName = (value?: string) => (value?.trim() || 'Khong ro ten'
   .replace(/\s+/g, '_') || 'Khong_ro_ten';
 
 export function buildFileName(session: ReportSession) {
-  return `Bao_cao_${normalizedChildName(session.childNameLabel)}_${normalizedDate(session.reportDate)}.docx`;
+  return `Bao_cao_${normalizedChildName(resolveSessionChildName(session))}_${normalizedDate(session.reportDate)}.docx`;
 }
 
 export function buildFileChipName(session: ReportSession) {
-  if (!session.childNameLabel?.trim() && session.sourceFileName?.trim()) return session.sourceFileName.trim();
-  return `${normalizedChildName(session.childNameLabel)}_${normalizedDate(session.reportDate)}.docx`;
+  const childName = resolveSessionChildName(session);
+  if (!childName && session.sourceFileName?.trim()) return session.sourceFileName.trim();
+  return `${normalizedChildName(childName)}_${normalizedDate(session.reportDate)}.docx`;
 }
 
 export async function downloadDocx(report: string, session: ReportSession) {

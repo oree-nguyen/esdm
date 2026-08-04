@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import mammoth from "mammoth";
 import { APP_NAME, DEFAULT_SETTINGS } from "../config/app";
-import { buildDocx, buildFileChipName, buildFileName, downloadBlob, downloadDocx, downloadMarkdown } from "../export/files";
+import { buildDocx, buildFileChipName, buildFileName, downloadBlob, downloadDocx, downloadMarkdown, resolveSessionChildName } from "../export/files";
 import { isCompleteReportMarkdown, runWorkflow } from "../services/workflow";
 import { StepTraceStatus } from "../components/chat/StepTraceStatus";
 import { BatchWorkflowGrid, type BatchJob } from "../components/chat/BatchWorkflowGrid";
@@ -80,7 +80,10 @@ const readAutoDownload = () => {
 export function App() {
   const saved = loadDraft();
   const restored = loadActiveSession();
-  const initialSession = restored ?? createSession();
+  const restoredSession = restored
+    ? { ...restored, childNameLabel: resolveSessionChildName(restored) || restored.childNameLabel }
+    : undefined;
+  const initialSession = restoredSession ?? createSession();
   const [session, setSession] = useState<ReportSession>(initialSession);
   const [sessions, setSessions] = useState(() => loadSessionIndex());
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -375,9 +378,11 @@ export function App() {
   function openSession(id: string) {
     const target = loadSession(id);
     if (!target) return;
-    setSession(target); setMessages(target.messages); setReport(target.stepOutputs.reportMarkdown ?? ""); setActiveReportSessionId(target.id);
-    setTrace(target.stepTraceLog.map((x, i) => ({ id: `saved-${i}`, text: x.text, phase: x.phase as StepEvent["phase"], status: "done" })));
-    setElapsed(Math.max(0, Math.round((target.updatedAt - target.createdAt) / 1000))); setSidebarOpen(false); setBatchJobs([]);
+    const restoredTarget = { ...target, childNameLabel: resolveSessionChildName(target) || target.childNameLabel };
+    if (restoredTarget.childNameLabel !== target.childNameLabel) saveSession(restoredTarget);
+    setSession(restoredTarget); setMessages(restoredTarget.messages); setReport(restoredTarget.stepOutputs.reportMarkdown ?? ""); setActiveReportSessionId(restoredTarget.id);
+    setTrace(restoredTarget.stepTraceLog.map((x, i) => ({ id: `saved-${i}`, text: x.text, phase: x.phase as StepEvent["phase"], status: "done" })));
+    setElapsed(Math.max(0, Math.round((restoredTarget.updatedAt - restoredTarget.createdAt) / 1000))); setSidebarOpen(false); setBatchJobs([]); setSessions(loadSessionIndex());
   }
 
   const completedJobs = batchJobs.filter((job) => job.status === "completed");
@@ -392,7 +397,7 @@ export function App() {
       <button className="menuButton" onClick={() => setSidebarOpen(!sidebarOpen)}>☰</button>
       <nav className={`sessionSidebar ${sidebarOpen ? "open" : ""}`}>
         <button onClick={newChat}>+ Cuộc trò chuyện mới</button>
-        {sessions.map((item) => <div className="sessionItem" key={item.id}><button onClick={() => openSession(item.id)}><i className={item.status} />{item.childNameLabel || "Báo cáo chưa đặt tên"}<small>{new Date(item.createdAt).toLocaleString("vi-VN")}</small></button><button aria-label="Xóa phiên" onClick={() => { if (confirm("Xóa phiên này?")) { deleteSession(item.id); setSessions(loadSessionIndex()); if (item.id === session.id) newChat(); } }}>🗑</button></div>)}
+        {sessions.map((item) => <div className="sessionItem" key={item.id}><button onClick={() => openSession(item.id)}><i className={item.status} />{item.childNameLabel || resolveSessionChildName(loadSession(item.id) ?? session) || "Báo cáo chưa đặt tên"}<small>{new Date(item.createdAt).toLocaleString("vi-VN")}</small></button><button aria-label="Xóa phiên" onClick={() => { if (confirm("Xóa phiên này?")) { deleteSession(item.id); setSessions(loadSessionIndex()); if (item.id === session.id) newChat(); } }}>🗑</button></div>)}
       </nav>
       {sidebarOpen && <button className="sidebarBackdrop" aria-label="Đóng lịch sử" onClick={() => setSidebarOpen(false)} />}
       <header>
