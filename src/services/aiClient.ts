@@ -131,8 +131,10 @@ async function requestAi(
         }
       : {}),
   };
+  const debugEnabled =
+    import.meta.env.DEV || new URLSearchParams(window.location.search).has("debug");
 
-  if (import.meta.env.DEV) {
+  if (debugEnabled) {
     console.debug("OpenRouter request", {
       url,
       model,
@@ -200,7 +202,7 @@ async function requestAi(
           };
         };
       };
-      if (import.meta.env.DEV) {
+      if (debugEnabled) {
         const usage = json.usage;
         const cachedTokens = usage?.prompt_tokens_details?.cached_tokens ?? 0;
         const promptTokens = usage?.prompt_tokens;
