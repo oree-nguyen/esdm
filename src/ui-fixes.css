@@ -1,6 +1,98 @@
 /* Small alignment and contrast fixes for the chat controls. */
-.attach{display:grid!important;place-items:center!important;line-height:1!important;padding:0!important;overflow:hidden}.attach::after{display:block;line-height:1;transform:translateY(-1px)}
-.send{display:grid!important;place-items:center!important;padding:0!important;background:#8ab4f8!important;color:#123b76!important}.send::after{display:block;line-height:1;transform:translateY(-1px)}.send:hover{background:#729fe8!important}
-.menuButton{top:10px;left:10px;width:44px;height:44px;display:grid;place-items:center;line-height:1}.sessionSidebar{padding-top:70px}.settingsDone{display:block!important;margin-top:20px;margin-right:auto!important;background:#8ab4f8!important;color:#123b76!important;padding:0 20px!important}.settingsDone:hover{background:#729fe8!important}
-.sidebarBackdrop{position:fixed;z-index:29;inset:0;border:0;border-radius:0;background:#0008}
-@media(max-width:1023px){header{padding-left:60px!important}}
+.attach {
+  display: grid !important;
+  place-items: center !important;
+  line-height: 1 !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.attach::after {
+  display: block;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+footer {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: end !important;
+  gap: 8px !important;
+}
+
+footer .composer {
+  width: 100%;
+  min-width: 0;
+  padding-right: 14px !important;
+}
+
+footer .send {
+  position: static !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 44px !important;
+  min-width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  display: grid !important;
+  place-items: center !important;
+  align-self: end !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background: #8ab4f8 !important;
+  color: #123b76 !important;
+}
+
+footer .send::after {
+  content: "\2192" !important;
+  display: block;
+  font-size: 22px;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+footer .send:hover {
+  background: #729fe8 !important;
+}
+
+.menuButton {
+  top: 10px;
+  left: 10px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.sessionSidebar {
+  padding-top: 70px;
+}
+
+.settingsDone {
+  display: block !important;
+  margin-top: 20px;
+  margin-right: auto !important;
+  background: #8ab4f8 !important;
+  color: #123b76 !important;
+  padding: 0 20px !important;
+}
+
+.settingsDone:hover {
+  background: #729fe8 !important;
+}
+
+.sidebarBackdrop {
+  position: fixed;
+  z-index: 29;
+  inset: 0;
+  border: 0;
+  border-radius: 0;
+  background: #0008;
+}
+
+@media (max-width: 1023px) {
+  header {
+    padding-left: 60px !important;
+  }
+}
