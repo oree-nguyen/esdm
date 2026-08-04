@@ -15,6 +15,7 @@ import type {
   RuleCheckResult,
   Settings,
   StepEvent,
+  WorkflowCheckpoint,
 } from "../types";
 const DOMAIN_LIST = ["Giao tiếp tiếp nhận", "Giao tiếp diễn đạt", "Hành vi tập trung chú ý", "Các kỹ năng xã hội", "Bắt chước", "Nhận thức", "Kỹ năng chơi", "Vận động tinh", "Vận động thô", "Tự lập"] as const;
 const domain = z.enum(DOMAIN_LIST);
@@ -133,7 +134,9 @@ export async function runWorkflow(
   settings: Settings,
   signal: AbortSignal,
   onStepEvent: (event: StepEvent) => void,
+  options: { resume?: WorkflowCheckpoint; onCheckpoint?: (state: WorkflowCheckpoint) => void } = {},
 ) {
+  const checkpoint = (state: WorkflowCheckpoint) => options.onCheckpoint?.(state);
   let sequence = 0;
   let active: StepEvent | undefined;
   let filler: ReturnType<typeof setTimeout> | undefined;
@@ -158,7 +161,8 @@ export async function runWorkflow(
     }, 3000);
   };
   step("analyzer", "Đang đọc dữ liệu đánh giá của trẻ");
-  const analysis = await askJson<Analysis>("analyzer", ANALYZER_PROMPT, input.sourceData, analysisSchema, analysisJsonSchema, "analysis", settings, signal);
+  const analysis = options.resume?.analysisJson ?? await askJson<Analysis>("analyzer", ANALYZER_PROMPT, input.sourceData, analysisSchema, analysisJsonSchema, "analysis", settings, signal);
+  checkpoint({ ...options.resume, lastCompletedStep: "analysis", analysisJson: analysis, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
   step("ruleEngineAnalysis", "Đang kiểm tra dữ liệu phân tích theo quy tắc");
   const missingAdministrative = analysis.administrative.missingFields.filter(
     (field) => field === "childName" || field === "birthDate",
@@ -178,7 +182,7 @@ export async function runWorkflow(
     evaluator: analysis.administrative.evaluator || input.evaluator,
   };
   step("goalSelection", "Đang chọn mục tiêu can thiệp phù hợp");
-  const goalsResult = await askJson(
+  const goalsResult = options.resume?.goalsJson ? { selectedGoals: options.resume.goalsJson } : await askJson(
     "analyzer",
     GOALS_PROMPT,
     JSON.stringify({ analysis, priorityDomains: input.priorityDomains ?? [] }),
@@ -192,6 +196,7 @@ export async function runWorkflow(
     ...goal,
     id: `goal-${index + 1}`,
   }));
+  checkpoint({ ...options.resume, lastCompletedStep: "goalSelection", analysisJson: analysis, goalsJson: goals, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
   const pre = runRules("", input, analysis, goals);
   if (pre.some((x) => !x.passed && x.severity === "critical"))
     throw new Error(
@@ -201,15 +206,23 @@ export async function runWorkflow(
         .join(" "),
     );
   step("writer", "Đang viết báo cáo chức năng hiện tại");
-  let report = await askAi(
+  let report = options.resume?.reportMarkdown ?? await askAi(
     "writer",
     WRITER_PROMPT,
     JSON.stringify({ input, analysis, goals }),
     settings,
     signal,
   );
-  let issues: RuleCheckResult[] = [];
-  for (let round = 0; round < 3; round++) {
+  checkpoint({ ...options.resume, lastCompletedStep: "writer", analysisJson: analysis, goalsJson: goals, reportMarkdown: report, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
+  let issues: RuleCheckResult[] = options.resume?.reviewIssuesJson ?? [];
+  for (let round = options.resume?.lastCompletedStep === "review" ? 0 : options.resume?.fixRoundCount ?? 0; round < 3; round++) {
+    if (options.resume?.lastCompletedStep === "review" && round === 0) {
+      step("fixer", "Đang sửa các lỗi được phát hiện");
+      report = await askAi("fixer", FIXER_PROMPT, JSON.stringify({ report, issues }), settings, signal);
+      checkpoint({ ...options.resume, lastCompletedStep: "fixer", analysisJson: analysis, goalsJson: goals, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: 1 });
+      options.resume = { ...options.resume, lastCompletedStep: "fixer", fixRoundCount: 1 };
+      continue;
+    }
     step("reviewer", "Đang kiểm tra báo cáo theo 20 tiêu chí");
     const [review, rules] = await Promise.all([
       askJson(
@@ -228,6 +241,7 @@ export async function runWorkflow(
       ...rules,
       ...review.issues.map((x) => ({ id: x.criterionId, title: `Tiêu chí ${x.criterionId}`, passed: false, severity: x.severity, message: x.problem, section: x.section, suggestedFix: x.suggestedFix, source: "reviewer" as const })),
     ].filter((x) => !x.passed);
+    checkpoint({ ...options.resume, lastCompletedStep: "review", analysisJson: analysis, goalsJson: goals, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: round });
     if (!issues.length) break;
     if (round === 2) break;
     step("fixer", "Đang sửa các lỗi được phát hiện");
@@ -238,8 +252,10 @@ export async function runWorkflow(
       settings,
       signal,
     );
+    checkpoint({ ...options.resume, lastCompletedStep: "fixer", analysisJson: analysis, goalsJson: goals, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: round + 1 });
   }
   step("done", "Đã xử lý xong");
   finishActive();
+  checkpoint({ ...options.resume, lastCompletedStep: "done", analysisJson: analysis, goalsJson: goals, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
   return { report, goals, issues, childName: input.childName };
 }

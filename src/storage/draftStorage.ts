@@ -1,2 +1,10 @@
-import type { ChatMessage, Settings } from '../types';
-const key='intervention-draft-v1'; export const loadDraft=()=>{try{return JSON.parse(localStorage.getItem(key)||'{}') as {messages?:ChatMessage[];report?:string;settings?:Settings}}catch{return {}}}; export const saveDraft=(value:unknown)=>localStorage.setItem(key,JSON.stringify(value)); export const clearStorage=()=>localStorage.clear();
+import type { ChatMessage, ReportSession, SessionIndexItem, Settings } from "../types";
+const key="intervention-draft-v1", indexKey="sessions:index", activeKey="sessions:active", maxSessions=20;
+export const loadDraft=()=>{try{return JSON.parse(localStorage.getItem(key)||"{}") as {messages?:ChatMessage[];report?:string;settings?:Settings}}catch{return {}}};
+export const saveDraft=(value:unknown)=>localStorage.setItem(key,JSON.stringify(value));
+export const clearStorage=()=>localStorage.clear();
+export const loadSessionIndex=():SessionIndexItem[]=>{try{return JSON.parse(localStorage.getItem(indexKey)||"[]")}catch{return []}};
+export const loadSession=(id:string):ReportSession|undefined=>{try{return JSON.parse(localStorage.getItem(`sessions:${id}`)||"null")||undefined}catch{return undefined}};
+export const loadActiveSession=()=>{const id=localStorage.getItem(activeKey);return id?loadSession(id):undefined};
+export const saveSession=(session:ReportSession)=>{session.updatedAt=Date.now();localStorage.setItem(`sessions:${session.id}`,JSON.stringify(session));const index=loadSessionIndex().filter(x=>x.id!==session.id);index.unshift({id:session.id,createdAt:session.createdAt,updatedAt:session.updatedAt,childNameLabel:session.childNameLabel,status:session.status});const removable=index.filter(x=>x.status==="completed").slice(maxSessions-1);removable.forEach(x=>{localStorage.removeItem(`sessions:${x.id}`);index.splice(index.findIndex(y=>y.id===x.id),1)});localStorage.setItem(indexKey,JSON.stringify(index));localStorage.setItem(activeKey,session.id)};
+export const deleteSession=(id:string)=>{localStorage.removeItem(`sessions:${id}`);localStorage.setItem(indexKey,JSON.stringify(loadSessionIndex().filter(x=>x.id!==id)));if(localStorage.getItem(activeKey)===id)localStorage.removeItem(activeKey)};

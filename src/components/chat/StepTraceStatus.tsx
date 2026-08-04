@@ -8,11 +8,15 @@ export function StepTraceStatus({
   working,
   elapsed,
   onCancel,
+  onContinue,
+  resumable = false,
 }: {
   events: StepEvent[];
   working: boolean;
   elapsed: number;
   onCancel?: () => void;
+  onContinue?: () => void;
+  resumable?: boolean;
 }) {
   const [open, setOpen] = useState(working);
   const endRef = useRef<HTMLDivElement>(null);
@@ -45,6 +49,7 @@ export function StepTraceStatus({
           {event.text}
         </div>
       ))}
+      {resumable && onContinue && <button className="traceContinue" onClick={onContinue}>Tiếp tục</button>}
       <div ref={endRef} />
     </section>
   );

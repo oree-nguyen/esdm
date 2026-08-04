@@ -109,3 +109,7 @@ export interface StepEvent {
     | "done";
   status: "active" | "done";
 }
+export type WorkflowStep = "none" | "analysis" | "goalSelection" | "writer" | "review" | "fixer" | "done";
+export interface WorkflowCheckpoint { lastCompletedStep: WorkflowStep; analysisJson?: Analysis; goalsJson?: GoalDraft[]; reportMarkdown?: string; reviewIssuesJson?: RuleCheckResult[]; fixRoundCount: number; }
+export interface ReportSession { id: string; createdAt: number; updatedAt: number; childNameLabel?: string; status: "in_progress" | "completed" | "stopped_missing_info" | "error"; rawInput: string; priorityDomains?: string[]; lastCompletedStep: WorkflowStep; stepOutputs: Omit<WorkflowCheckpoint, "lastCompletedStep">; stepTraceLog: { text: string; phase: string }[]; messages: ChatMessage[]; lastError?: string; }
+export interface SessionIndexItem { id: string; createdAt: number; updatedAt: number; childNameLabel?: string; status: ReportSession["status"] }
