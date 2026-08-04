@@ -4,7 +4,7 @@ import { APP_NAME, DEFAULT_SETTINGS } from "../config/app";
 import { downloadDocx, downloadMarkdown } from "../export/files";
 import { runWorkflow } from "../services/workflow";
 import { StepTraceStatus } from "../components/chat/StepTraceStatus";
-import { clearStorage, deleteSession, loadActiveSession, loadDraft, loadSession, loadSessionIndex, saveDraft, saveSession } from "../storage/draftStorage";
+import { deleteSession, loadActiveSession, loadDraft, loadSession, loadSessionIndex, saveDraft, saveSession } from "../storage/draftStorage";
 import type {
   ChatMessage,
   ChildInput,
@@ -351,17 +351,7 @@ export function App() {
               />{" "}
               Test mode: use openai/gpt-oss-20b:free for all roles
             </label>
-            <button
-              onClick={() => {
-                if (confirm("Xóa toàn bộ dữ liệu cục bộ?")) {
-                  clearStorage();
-                  location.reload();
-                }
-              }}
-            >
-              Xóa dữ liệu cục bộ
-            </button>
-            <button onClick={() => setSettingsOpen(false)}>Xong</button>
+            <button className="settingsDone" onClick={() => setSettingsOpen(false)}>Xong</button>
           </section>
         </div>
       )}

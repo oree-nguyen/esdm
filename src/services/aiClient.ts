@@ -66,8 +66,14 @@ async function requestAi(
         }),
       });
       if (!response.ok) {
+        const rawError = await response.text();
+        let providerDetail = "";
+        try {
+          const parsed = JSON.parse(rawError) as { error?: { message?: string } | string; message?: string };
+          providerDetail = typeof parsed.error === "string" ? parsed.error : parsed.error?.message ?? parsed.message ?? "";
+        } catch { providerDetail = rawError.slice(0, 240); }
         if ((response.status === 429 || response.status >= 500) && attempt < 2) continue;
-        throw new AiError("api", messageOf(response.status), response.status);
+        throw new AiError("api", `${messageOf(response.status)} (HTTP ${response.status})${providerDetail ? `: ${providerDetail}` : ""}`, response.status);
       }
       const json = await response.json() as {
         model?: string; provider?: string; choices?: { message?: { content?: AiContent } }[];
