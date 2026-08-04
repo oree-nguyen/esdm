@@ -16,7 +16,16 @@ const goalFrameValid = (section:string) => {
   if (!section) return true;
   const headings = section.match(/^###\s+/gmi) ?? [];
   const family = section.match(/Hoạt động gia đình/gi) ?? [];
-  return headings.length >= 7 && family.length >= 2;
+  const topics = [
+    'Kỹ năng chơi – tương tác xã hội',
+    'Giao tiếp diễn đạt trong thực tế hàng ngày',
+    'Nhận thức phục vụ thực tế học tập và sinh hoạt hàng ngày',
+    'Nghe hiểu khi giao tiếp',
+    'Khả năng học tập – Ghi nhớ',
+    'Kỹ năng tự lập',
+    'Kỹ năng chơi/làm việc nhóm',
+  ];
+  return headings.length >= 7 && family.length >= 2 && topics.every(topic => section.includes(topic));
 };
 export function runRules(report:string,input:ChildInput,analysis:Analysis,goals:GoalDraft[]):RuleCheckResult[] {
   const skills=analysis.domains.flatMap(d=>d.skills);

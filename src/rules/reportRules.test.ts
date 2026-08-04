@@ -18,7 +18,8 @@ describe('rule engine',()=>{
     expect(results.find(x=>x.id===15)?.passed).toBe(true);
   });
   it('rejects source A/P/N/X codes in section III',()=>expect(runRules(report('- [P] Kỹ năng'),input,analysis,[]).find(x=>x.id===8)?.passed).toBe(false));
+  it('rejects +/- classification marks in section III',()=>expect(runRules(report('- Kỹ năng — căn cứ: +/-'),input,analysis,[]).find(x=>x.id===8)?.passed).toBe(false));
   it('rejects a fourth group in section III',()=>expect(runRules(report('### Điểm mạnh\n### Đang hình thành\n### Ưu tiên phát triển\n### Cần quan sát thêm'),input,analysis,[]).find(x=>x.id===11)?.passed).toBe(false));
   it('rejects more than three priority skills in one domain',()=>expect(runRules(report('### Ưu tiên phát triển\n- a\n- b\n- c\n- d'),input,analysis,[]).find(x=>x.id===10)?.passed).toBe(false));
-  it('rejects a goal section without two family activities',()=>expect(runRules(report('', '### 1\n### 2\n### 3\n### 4\n### 5\n### 6\n### 7'),input,analysis,[]).find(x=>x.id===13)?.passed).toBe(false));
+  it('rejects a goal section without the seven fixed topics and two family activities',()=>expect(runRules(report('', '### 1\n### 2\n### 3\n### 4\n### 5\n### 6\n### 7'),input,analysis,[]).find(x=>x.id===13)?.passed).toBe(false));
 });
