@@ -153,12 +153,35 @@ export const parseGoalsMarkdown = (markdown: string) => {
   const relevant = goalStart >= 0
     ? markdown.slice(goalStart, endCandidates.length ? Math.min(...endCandidates) : undefined)
     : markdown;
-  const blocks = relevant.split(/^###\s*\d+[.)]\s*/mi).slice(1);
+  const blocks = relevant.split(/(?=^###\s*\d+[.)]\s*)/mi).filter((block) => /^###\s*\d+[.)]\s*/mi.test(block));
   if (!blocks.length) return undefined;
-  const selectedGoals = blocks.filter((block) => !/Trạng thái\s*:\s*không có ứng viên/i.test(block)).map((block, index) => {
+  const selectedGoals = blocks.map((block, index) => {
+    const noCandidate = /Trạng thái\s*:\s*không có ứng viên/i.test(block);
     const baseline = valueOf(block, "Baseline");
+    if (noCandidate) {
+      return {
+        id: `goal-${index + 1}`,
+        status: "no_candidate" as const,
+        topic: block.match(/^###\s*\d+[.)]\s*(.+)$/mi)?.[1]?.trim() ?? "",
+        domain: normalizeDomain(valueOf(block, "Lĩnh vực nguồn") || valueOf(block, "Lĩnh vực")),
+        sourceSkill: valueOf(block, "Kỹ năng nguồn"),
+        targetBehavior: "",
+        duration: "",
+        context: "",
+        opportunityCondition: "",
+        maxSupport: "",
+        masteryCriterion: "",
+        contextsCount: 0,
+        peopleCount: 0,
+        consecutiveSessions: 0,
+        baselineStatus: "missing" as const,
+        baselineEvidence: "",
+      };
+    }
     return {
       id: `goal-${index + 1}`,
+      status: "selected" as const,
+      topic: block.match(/^###\s*\d+[.)]\s*(.+)$/mi)?.[1]?.trim() ?? "",
       domain: normalizeDomain(valueOf(block, "Lĩnh vực nguồn") || valueOf(block, "Lĩnh vực")),
       sourceSkill: valueOf(block, "Kỹ năng nguồn"),
       targetBehavior: valueOf(block, "Hành vi đích"),
@@ -174,7 +197,7 @@ export const parseGoalsMarkdown = (markdown: string) => {
       baselineEvidence: baseline.split("—")[1]?.replace(/^\s*căn cứ:\s*/i, "") ?? "",
     };
   });
-  const hasMissingEssentialContent = selectedGoals.some((goal) =>
+  const hasMissingEssentialContent = selectedGoals.some((goal) => goal.status !== "no_candidate" &&
     [
       goal.domain,
       goal.sourceSkill,
@@ -306,7 +329,7 @@ export async function runWorkflow(
   if (missingEssential.length)
     throw new Error(`Dữ liệu bạn cung cấp chưa có ${missingEssential.join(" và ")}. Vui lòng bổ sung rồi gửi lại.`);
   step("goalSelection", "Đang chọn mục tiêu can thiệp phù hợp");
-  const savedGoals = options.resume?.goalsJson?.filter(hasEssentialGoalContent);
+  const savedGoals = options.resume?.goalsJson?.filter((goal) => goal.status === "no_candidate" || hasEssentialGoalContent(goal));
   const goalsResult = savedGoals?.length ? { value: { selectedGoals: savedGoals }, text: options.resume?.goalsMarkdown ?? JSON.stringify({ selectedGoals: savedGoals }) } : await askStructuredWithText(
     "analyzer",
     GOALS_PROMPT,
@@ -324,6 +347,7 @@ export async function runWorkflow(
       .map((skill) => ({ domain: entry.name, skill: skill.skill })),
   );
   const goals: GoalDraft[] = goalsResult.value.selectedGoals.map((goal, index) => {
+    if (goal.status === "no_candidate") return { ...goal, id: `goal-${index + 1}` };
     const requested = comparableSkill(goal.sourceSkill);
     const source = eligibleSkills.find((candidate) => {
       const available = comparableSkill(candidate.skill);

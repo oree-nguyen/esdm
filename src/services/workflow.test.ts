@@ -56,8 +56,9 @@ describe("parseGoalsMarkdown", () => {
 - Mô tả hoạt động: Gia đình tạo cơ hội gọi tên đồ vật
 - Vì sao cần thiết: Bám mục tiêu giao tiếp`);
 
-    expect(result?.selectedGoals).toHaveLength(1);
-    expect(result?.selectedGoals[0].domain).toBe("Giao tiếp diễn đạt");
+    expect(result?.selectedGoals).toHaveLength(2);
+    expect(result?.selectedGoals[0]).toMatchObject({ status: "no_candidate", topic: "Kỹ năng chơi – tương tác xã hội" });
+    expect(result?.selectedGoals[1].domain).toBe("Giao tiếp diễn đạt");
   });
 });
 

@@ -44,6 +44,8 @@ export interface AnalysisReference {
 }
 export interface GoalDraft {
   id: string;
+  status?: "selected" | "no_candidate";
+  topic?: string;
   domain: string;
   sourceSkill: string;
   targetBehavior: string;
