@@ -158,7 +158,7 @@ footer {
   padding: 30px max(18px, calc((100% - 820px) / 2)) max(18px, env(safe-area-inset-bottom));
   display: grid;
   grid-template-columns: minmax(0, 1fr) 48px;
-  align-items: end;
+  align-items: center;
   gap: 10px;
   background: linear-gradient(to bottom, transparent, var(--bg-app) 26px, var(--bg-app));
   pointer-events: none;
@@ -188,7 +188,7 @@ footer > * { pointer-events: auto; }
 .attach {
   position: absolute;
   left: 8px;
-  bottom: 7px;
+  top: 50%;
   width: 44px;
   height: 44px;
   padding: 0;
@@ -201,12 +201,13 @@ footer > * { pointer-events: auto; }
   place-items: center;
   font-size: 0;
   line-height: 1;
+  transform: translateY(-50%);
   transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .12s ease;
 }
 
 .attach::after { content: "+"; display: block; font-size: 27px; font-weight: 300; line-height: 1; transform: translateY(-1px); }
 .attach:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
-.attach:active { transform: scale(.96); }
+.attach:active { transform: translateY(-50%) scale(.96); }
 .attach input { display: none; }
 
 .send {
