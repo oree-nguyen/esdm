@@ -189,9 +189,10 @@ export function App() {
             : item,
         ),
       );
-      if (error instanceof DOMException && error.name === "AbortError")
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setSession((s) => ({ ...s, status: "error", lastError: "Đã hủy quy trình." }));
         say("Đã hủy quy trình.");
-      else {
+      } else {
         const message = error instanceof Error ? error.message : "Đã có lỗi không xác định.";
         setSession((s) => ({ ...s, status: message.includes("chưa có") ? "stopped_missing_info" : "error", lastError: message }));
         say(
@@ -249,7 +250,7 @@ export function App() {
           working={working}
           elapsed={elapsed}
           onCancel={() => controller.current?.abort()}
-          resumable={!working && (session.status === "in_progress" || session.status === "error") && session.lastCompletedStep !== "none"}
+          resumable={!working && (session.status === "in_progress" || session.status === "error") && Boolean(session.rawInput)}
           onContinue={() => submit(true)}
         />
       </section>
