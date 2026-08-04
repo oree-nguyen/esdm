@@ -14,6 +14,27 @@ export const normalizeContent = (content: AiContent): string | undefined =>
   Array.isArray(content)
     ? content.map((part) => part.text ?? "").join("")
     : content;
+export const extractJsonObject = (text: string): string | undefined => {
+  const start = text.indexOf("{");
+  if (start < 0) return undefined;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < text.length; index++) {
+    const character = text[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"') inString = true;
+    else if (character === "{") depth++;
+    else if (character === "}" && --depth === 0)
+      return text.slice(start, index + 1);
+  }
+  return undefined;
+};
 const messageOf = (status: number) =>
   status === 401
     ? "Khóa truy cập không hợp lệ."
@@ -121,22 +142,20 @@ export async function askJson<T>(
     attachment,
     true,
   );
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 2; i++) {
     let parsed: ReturnType<typeof schema.safeParse>;
     try {
-      const cleaned = output.replace(/^```(?:json)?\s*|\s*```$/g, "");
-      const first = cleaned.indexOf("{");
-      const last = cleaned.lastIndexOf("}");
-      parsed = schema.safeParse(
-        JSON.parse(
-          first >= 0 && last > first ? cleaned.slice(first, last + 1) : cleaned,
-        ),
+      const candidate = extractJsonObject(
+        output.replace(/^```(?:json)?\s*|\s*```$/g, ""),
       );
+      parsed = schema.safeParse(candidate ? JSON.parse(candidate) : undefined);
     } catch {
       parsed = schema.safeParse(undefined);
     }
     if (parsed.success) return parsed.data;
-    if (i === 2) break;
+    if (import.meta.env.DEV)
+      console.debug("Invalid JSON response", { role, output });
+    if (i === 1) break;
     output = await askAi(
       role,
       "Bạn chỉ trả JSON hợp lệ theo schema yêu cầu.",
