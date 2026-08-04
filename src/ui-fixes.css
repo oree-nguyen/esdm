@@ -177,6 +177,28 @@ footer .fileError {
   background: var(--bg-hover);
 }
 
+.batchResumeBanner {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 16px;
+  border: 1px solid #e7a43b;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, #e7a43b 12%, var(--bg-app));
+}
+
+.batchResumeBanner strong { font-size: 14px; }
+.batchResumeBanner > span { color: var(--text-secondary); font-size: 12px; }
+.batchResumeBanner > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.batchResumeBanner button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-app);
+}
+.batchResumeBanner button:first-child { border-color: transparent; background: #8ab4f8; color: #123b76; }
+.batchResumeBanner button:disabled { cursor: not-allowed; opacity: .55; }
+
 .batchPreparing {
   display: flex;
   align-items: center;

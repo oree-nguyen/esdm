@@ -5,8 +5,8 @@ import { buildDocx, buildFileChipName, buildFileName, downloadBlob, downloadDocx
 import { isCompleteReportMarkdown, runWorkflow } from "../services/workflow";
 import { StepTraceStatus } from "../components/chat/StepTraceStatus";
 import { BatchWorkflowGrid, type BatchJob } from "../components/chat/BatchWorkflowGrid";
-import { deleteSession, loadActiveSession, loadDraft, loadSession, loadSessionIndex, saveDraft, saveSession } from "../storage/draftStorage";
-import type { ChatMessage, ChildInput, ReportSession, Settings, StepEvent, WorkflowCheckpoint } from "../types";
+import { deleteBatch, deleteSession, loadActiveSession, loadBatch, loadBatches, loadDraft, loadSession, loadSessionIndex, saveBatch, saveDraft, saveSession } from "../storage/draftStorage";
+import type { BatchRecord, ChatMessage, ChildInput, ReportSession, Settings, StepEvent, WorkflowCheckpoint, WorkflowStep } from "../types";
 import "../attachment.css";
 
 const today = () => new Date().toLocaleDateString("en-CA");
@@ -77,6 +77,49 @@ const readAutoDownload = () => {
   } catch { return true; }
 };
 
+interface PendingBatch {
+  record: BatchRecord;
+  sessions: ReportSession[];
+  pendingCount: number;
+}
+
+const restoredProgress: Record<WorkflowStep, number> = {
+  none: 5,
+  analysis: 25,
+  goalSelection: 38,
+  writer: 58,
+  review: 76,
+  fixer: 88,
+  done: 100,
+};
+
+const restoredStatus: Record<WorkflowStep, string> = {
+  none: "Sẵn sàng tiếp tục",
+  analysis: "Đã phân tích kỹ năng",
+  goalSelection: "Đã chọn mục tiêu",
+  writer: "Đã viết báo cáo",
+  review: "Đã kiểm tra báo cáo",
+  fixer: "Đã sửa lỗi",
+  done: "Đã xử lý xong",
+};
+
+const jobFromSession = (stored: ReportSession): BatchJob => {
+  const completed = stored.status === "completed";
+  const missingInput = !stored.rawInput.trim();
+  return {
+    id: stored.id,
+    fileName: stored.sourceFileName || `Tệp ${(stored.batchIndex ?? 0) + 1}`,
+    sourceText: stored.rawInput,
+    status: completed ? "completed" : missingInput ? "error" : "queued",
+    progress: completed ? 100 : restoredProgress[stored.lastCompletedStep],
+    currentStatus: completed ? "Đã xử lý xong" : restoredStatus[stored.lastCompletedStep],
+    trace: stored.stepTraceLog.map((item, index) => ({ id: `restored-${stored.id}-${index}`, text: item.text, phase: item.phase as StepEvent["phase"], status: "done" })),
+    session: stored,
+    report: stored.stepOutputs.reportMarkdown,
+    error: missingInput && !completed ? "Không còn dữ liệu nguồn để tiếp tục." : undefined,
+  };
+};
+
 export function App() {
   const saved = loadDraft();
   const restored = loadActiveSession();
@@ -109,11 +152,24 @@ export function App() {
   const [batchAwaitingStart, setBatchAwaitingStart] = useState(false);
   const [batchPreparing, setBatchPreparing] = useState(false);
   const [batchRunning, setBatchRunning] = useState(false);
+  const [pendingBatches, setPendingBatches] = useState<PendingBatch[]>([]);
   const controller = useRef<AbortController | null>(null);
   const batchControllers = useRef(new Map<string, AbortController>());
   const autoDownloadRef = useRef(autoDownload);
 
   useEffect(() => { autoDownloadRef.current = autoDownload; }, [autoDownload]);
+  useEffect(() => {
+    const pending = loadBatches().flatMap((record): PendingBatch[] => {
+      const storedSessions = record.sessionIds.map(loadSession).filter((item): item is ReportSession => Boolean(item));
+      const pendingCount = storedSessions.filter((item) => item.status === "in_progress" || item.status === "error").length;
+      if (!pendingCount) {
+        if (storedSessions.length === record.sessionIds.length && storedSessions.every((item) => item.status === "completed")) deleteBatch(record.batchId);
+        return [];
+      }
+      return [{ record, sessions: storedSessions, pendingCount }];
+    });
+    setPendingBatches(pending);
+  }, []);
   useEffect(() => {
     saveDraft({ messages, report, settings: settings.persistKey ? settings : { ...settings, apiKey: "" } });
   }, [messages, report, settings]);
@@ -139,6 +195,14 @@ export function App() {
       stepOutputs: { ...current.stepOutputs, reportMarkdown: undefined, reviewIssuesJson: undefined, fixRoundCount: 0 },
     }));
   }, [activeReportSessionId, report, session.id, session.status]);
+  useEffect(() => {
+    if (session.status !== "completed" || !session.batchId) return;
+    const batch = loadBatch(session.batchId);
+    if (batch?.sessionIds.every((id) => loadSession(id)?.status === "completed")) {
+      deleteBatch(session.batchId);
+      setPendingBatches((items) => items.filter((item) => item.record.batchId !== session.batchId));
+    }
+  }, [session.batchId, session.status]);
 
   const say = (text: string, reportSessionId?: string, reportFileName?: string) =>
     setMessages((current) => [...current, {
@@ -184,22 +248,35 @@ export function App() {
     setAttachedFile("");
     setExtractedText("");
     const settled = await Promise.allSettled(files.map(async (file) => ({ file, text: await readDocx(file) })));
+    const batchId = crypto.randomUUID();
+    const batchCreatedAt = Date.now();
     const jobs = settled.map((item, index): BatchJob => {
       const file = files[index];
       const sourceText = item.status === "fulfilled" ? item.value.text : "";
       const error = item.status === "rejected" ? (item.reason instanceof Error ? item.reason.message : "Không thể đọc tệp DOCX.") : undefined;
+      const batchSession: ReportSession = {
+        ...createSession(sourceText, file.name),
+        batchId,
+        batchIndex: index,
+        batchTotal: files.length,
+        status: error ? "error" : "in_progress",
+        lastError: error,
+      };
       return {
-        id: crypto.randomUUID(),
+        id: batchSession.id,
         fileName: file.name,
         sourceText,
         status: error ? "error" : "queued",
         progress: error ? 0 : 5,
         currentStatus: error ? "Không thể đọc tệp" : "Sẵn sàng xử lý",
         trace: [],
-        session: createSession(sourceText, file.name),
+        session: batchSession,
         error,
       };
     });
+    saveBatch({ batchId, sessionIds: jobs.map((job) => job.session.id), createdAt: batchCreatedAt });
+    jobs.forEach((job) => saveSession(job.session));
+    setSessions(loadSessionIndex());
     setBatchJobs(jobs);
     setBatchAwaitingStart(true);
     setBatchPreparing(false);
@@ -315,7 +392,7 @@ export function App() {
     }
   }
 
-  async function startBatch(targets = batchJobs.filter((job) => job.status === "queued"), resume = false) {
+  async function startBatch(targets = batchJobs.filter((job) => job.status === "queued"), resume = false, allJobs = batchJobs) {
     if (!targets.length || batchRunning) return;
     setBatchAwaitingStart(false);
     setBatchRunning(true);
@@ -326,10 +403,43 @@ export function App() {
     setSessions(loadSessionIndex());
     if (autoDownloadRef.current && completed.length) {
       const completedById = new Map<string, ReportSession>();
-      batchJobs.filter((job) => job.status === "completed").forEach((job) => completedById.set(job.session.id, loadSession(job.session.id) ?? job.session));
+      allJobs.filter((job) => job.status === "completed").forEach((job) => completedById.set(job.session.id, loadSession(job.session.id) ?? job.session));
       completed.forEach((item) => completedById.set(item.id, item));
       await downloadAll([...completedById.values()]);
     }
+    const batchId = targets[0]?.session.batchId;
+    const batch = batchId ? loadBatch(batchId) : undefined;
+    if (batch?.sessionIds.every((id) => loadSession(id)?.status === "completed")) {
+      deleteBatch(batch.batchId);
+      setPendingBatches((items) => items.filter((item) => item.record.batchId !== batch.batchId));
+    }
+  }
+
+  async function resumePendingBatch(pending: PendingBatch) {
+    if (batchRunning) return;
+    const orderedSessions = pending.record.sessionIds
+      .map((id) => loadSession(id))
+      .filter((item): item is ReportSession => Boolean(item))
+      .sort((a, b) => (a.batchIndex ?? 0) - (b.batchIndex ?? 0));
+    const jobs = orderedSessions.map(jobFromSession);
+    const targets = jobs.filter((job) => job.session.status === "in_progress" || job.session.status === "error").filter((job) => job.sourceText.trim());
+    setBatchJobs(jobs);
+    setBatchAwaitingStart(false);
+    setPendingBatches((items) => items.filter((item) => item.record.batchId !== pending.record.batchId));
+    const completedMessages = jobs.filter((job) => job.status === "completed").map((job): ChatMessage => ({
+      id: `restored-chip-${job.session.id}`,
+      role: "assistant",
+      text: `Báo cáo đã hoàn thành cho ${resolveSessionChildName(job.session) || job.fileName}.`,
+      report: true,
+      reportSessionId: job.session.id,
+      reportFileName: buildFileChipName(job.session),
+      createdAt: job.session.updatedAt,
+    }));
+    setMessages((current) => {
+      const existing = new Set(current.flatMap((item) => item.reportSessionId ? [item.reportSessionId] : []));
+      return [...current, ...completedMessages.filter((item) => !item.reportSessionId || !existing.has(item.reportSessionId))];
+    });
+    await startBatch(targets, true, jobs);
   }
 
   function cancelBatchJob(id: string) {
@@ -409,6 +519,16 @@ export function App() {
         </div>
       </header>
       <section className="chat">
+        {pendingBatches.map((pending) => (
+          <section className="batchResumeBanner" key={pending.record.batchId}>
+            <strong>⚠️ Phát hiện {pending.pendingCount}/{pending.record.sessionIds.length} tệp chưa hoàn thành</strong>
+            <span>từ phiên làm việc trước ({new Date(pending.record.createdAt).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "numeric" })})</span>
+            <div>
+              <button disabled={batchRunning} onClick={() => void resumePendingBatch(pending)}>Tiếp tục tất cả</button>
+              <button onClick={() => setPendingBatches((items) => items.filter((item) => item.record.batchId !== pending.record.batchId))}>Bỏ qua</button>
+            </div>
+          </section>
+        ))}
         {messages.map((message) => (
           <article key={message.id} className={`bubble ${message.role}`}>
             <p>{message.text}</p>
