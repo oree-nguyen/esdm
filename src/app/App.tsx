@@ -593,7 +593,7 @@ export function App() {
             <label><input type="checkbox" checked={settings.persistKey} onChange={(event) => setSettings({ ...settings, persistKey: event.target.checked })} /> Lưu khóa trên thiết bị này</label>
             <label>Chế độ<select value={settings.mode} onChange={(event) => setSettings({ ...settings, mode: event.target.value as Settings["mode"] })}><option value="direct">Gọi trực tiếp</option><option value="worker">Qua Cloudflare Worker</option></select></label>
             <label>Địa chỉ API<input value={settings.endpoint} onChange={(event) => setSettings({ ...settings, endpoint: event.target.value })} /></label>
-            <label><input type="checkbox" checked={settings.testMode} onChange={(event) => setSettings({ ...settings, testMode: event.target.checked })} /> Chế độ test (dùng DeepSeek V4 Flash cho cả 4 vai trò)</label>
+            <label><input type="checkbox" checked={settings.testMode} onChange={(event) => setSettings({ ...settings, testMode: event.target.checked })} /> Chế độ test (dùng DeepSeek V4 Flash 0731 cho cả 4 vai trò)</label>
             <div className="settingsSection">
               <h3>XUẤT FILE</h3>
               <label className="toggleRow"><span>Tự động tải tất cả .docx khi xong</span><input type="checkbox" role="switch" checked={autoDownload} onChange={(event) => { const next = event.target.checked; setAutoDownload(next); localStorage.setItem("settings:autoDownload", String(next)); }} /></label>

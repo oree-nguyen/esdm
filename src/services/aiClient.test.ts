@@ -29,7 +29,7 @@ describe("OpenRouter streaming", () => {
         controller.enqueue(encoder.encode(": OPENROUTER PROCESSING\n\n"));
         controller.enqueue(
           encoder.encode(
-            'data: {"model":"deepseek/deepseek-v4-flash","choices":[{"delta":{"content":"Xin "}}]}\n\n',
+            'data: {"model":"deepseek/deepseek-v4-flash-0731","choices":[{"delta":{"content":"Xin "}}]}\n\n',
           ),
         );
         controller.enqueue(
