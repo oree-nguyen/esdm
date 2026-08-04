@@ -46,7 +46,56 @@ const messageOf = (status: number) =>
           ? "Mô hình không khả dụng."
           : "Không thể gọi dịch vụ AI.";
 
-const REQUEST_TIMEOUT_MS = 25_000;
+// Free providers can queue before returning a long report. Twenty-five seconds
+// cancelled otherwise healthy generations too early.
+const REQUEST_TIMEOUT_MS = 120_000;
+const MAX_REQUEST_ATTEMPTS = 4;
+
+const waitForRetry = (milliseconds: number, signal: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const timer = window.setTimeout(resolve, milliseconds);
+    signal.addEventListener(
+      "abort",
+      () => {
+        window.clearTimeout(timer);
+        reject(new DOMException("Aborted", "AbortError"));
+      },
+      { once: true },
+    );
+  });
+
+const retryDelayMs = (response: Response, attempt: number) => {
+  const retryAfter = response.headers.get("Retry-After");
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds)) return Math.min(Math.max(seconds * 1_000, 1_000), 30_000);
+    const retryAt = Date.parse(retryAfter);
+    if (Number.isFinite(retryAt)) return Math.min(Math.max(retryAt - Date.now(), 1_000), 30_000);
+  }
+  return Math.min(2_000 * 2 ** attempt, 16_000);
+};
+
+const providerErrorDetail = (rawError: string) => {
+  try {
+    const parsed = JSON.parse(rawError) as {
+      error?: {
+        message?: string;
+        metadata?: { raw?: string; provider_name?: string };
+      } | string;
+      message?: string;
+    };
+    if (typeof parsed.error === "string") return parsed.error;
+    const message = parsed.error?.message ?? parsed.message ?? "";
+    const provider = parsed.error?.metadata?.provider_name;
+    const rawProviderError = parsed.error?.metadata?.raw;
+    return [message, provider && `Provider: ${provider}`, rawProviderError]
+      .filter(Boolean)
+      .join(" — ")
+      .slice(0, 500);
+  } catch {
+    return rawError.slice(0, 500);
+  }
+};
 
 interface AiResponse {
   text: string;
@@ -70,7 +119,8 @@ async function requestAi(
       : `${settings.endpoint.replace(/\/$/, "")}/chat/completions`;
   const model = resolveModel(role, settings.testMode);
 
-  for (let attempt = 0; attempt < 3; attempt++) {
+  let timeoutRetries = 0;
+  for (let attempt = 0; attempt < MAX_REQUEST_ATTEMPTS; attempt++) {
     const timeoutController = new AbortController();
     const timer = window.setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS);
     const abortFromUser = () => timeoutController.abort();
@@ -95,23 +145,17 @@ async function requestAi(
 
       if (!response.ok) {
         const rawError = await response.text();
-        let providerDetail = "";
-        try {
-          const parsed = JSON.parse(rawError) as {
-            error?: { message?: string } | string;
-            message?: string;
-          };
-          providerDetail =
-            typeof parsed.error === "string"
-              ? parsed.error
-              : parsed.error?.message ?? parsed.message ?? "";
-        } catch {
-          providerDetail = rawError.slice(0, 240);
+        const providerDetail = providerErrorDetail(rawError);
+        if (
+          (response.status === 429 || response.status === 408 || response.status >= 500) &&
+          attempt < MAX_REQUEST_ATTEMPTS - 1
+        ) {
+          await waitForRetry(retryDelayMs(response, attempt), signal);
+          continue;
         }
-        if ((response.status === 429 || response.status >= 500) && attempt < 2) continue;
         throw new AiError(
           "api",
-          `${messageOf(response.status)} (HTTP ${response.status})${providerDetail ? `: ${providerDetail}` : ""}`,
+          `${messageOf(response.status)} (HTTP ${response.status}, đã thử ${attempt + 1} lần)${providerDetail ? `: ${providerDetail}` : ""}`,
           response.status,
         );
       }
@@ -126,13 +170,22 @@ async function requestAi(
       return { text, model: json.model ?? model, provider: json.provider };
     } catch (error) {
       if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-      if (timeoutController.signal.aborted)
+      if (timeoutController.signal.aborted) {
+        if (timeoutRetries++ < 1 && attempt < MAX_REQUEST_ATTEMPTS - 1) {
+          await waitForRetry(2_000, signal);
+          continue;
+        }
         throw new AiError(
           "network",
-          `Không nhận được phản hồi từ OpenRouter trong 25 giây. Model: ${model}. API: ${url}. Nếu OpenRouter Logs trống, request chưa được OpenRouter ghi nhận; hãy kiểm tra mạng, khóa API, workspace đang xem và địa chỉ API rồi thử lại.`,
+          `OpenRouter không phản hồi sau 120 giây và app đã thử kết nối lại. Model: ${model}. API: ${url}. Nếu OpenRouter Logs trống, request chưa tới OpenRouter; hãy kiểm tra mạng, khóa API, workspace và địa chỉ API.`,
         );
+      }
       if (error instanceof AiError) throw error;
-      if (attempt === 2)
+      if (attempt < MAX_REQUEST_ATTEMPTS - 1) {
+        await waitForRetry(Math.min(1_000 * 2 ** attempt, 8_000), signal);
+        continue;
+      }
+      if (attempt === MAX_REQUEST_ATTEMPTS - 1)
         throw new AiError(
           "network",
           `Không thể gửi yêu cầu tới OpenRouter. Model: ${model}. API: ${url}. Chi tiết trình duyệt: ${error instanceof Error ? error.message : String(error)}. Nếu OpenRouter Logs trống, lỗi xảy ra trước khi OpenRouter tạo transaction.`,
