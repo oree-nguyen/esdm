@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import mammoth from "mammoth";
 import { APP_NAME, DEFAULT_SETTINGS } from "../config/app";
-import { buildDocx, downloadBlob, downloadDocx, downloadMarkdown } from "../export/files";
+import { buildDocx, buildFileChipName, buildFileName, downloadBlob, downloadDocx, downloadMarkdown } from "../export/files";
 import { isCompleteReportMarkdown, runWorkflow } from "../services/workflow";
 import { StepTraceStatus } from "../components/chat/StepTraceStatus";
 import { BatchWorkflowGrid, type BatchJob } from "../components/chat/BatchWorkflowGrid";
@@ -69,12 +69,6 @@ const cellProgress = (phase: StepEvent["phase"]) => ({
   fixer: 88,
   done: 100,
 })[phase];
-
-const safeFilePart = (value: string) => value
-  .normalize("NFC")
-  .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
-  .replace(/\s+/g, " ")
-  .trim() || "bao-cao";
 
 const readAutoDownload = () => {
   try {
@@ -230,12 +224,16 @@ export function App() {
     try {
       const result = await runWorkflow(buildInput(text), settings, controller.current.signal, (event) => setTrace((events) => mergeEvent(events, event)), {
         resume: resume ? { lastCompletedStep: session.lastCompletedStep, ...session.stepOutputs } : undefined,
-        onCheckpoint: (checkpoint) => setSession((current) => ({ ...current, lastCompletedStep: checkpoint.lastCompletedStep, stepOutputs: checkpointOutputs(checkpoint) })),
+        onCheckpoint: (checkpoint) => setSession((current) => ({
+          ...current,
+          childNameLabel: checkpoint.analysisJson?.administrative.childName?.trim() || current.childNameLabel,
+          lastCompletedStep: checkpoint.lastCompletedStep,
+          stepOutputs: checkpointOutputs(checkpoint),
+        })),
       });
       setReport(result.report);
-      const completed = { ...session, rawInput: text, sourceFileName, reportDate: session.reportDate ?? today(), status: "completed" as const, childNameLabel: result.childName, lastCompletedStep: "done" as const, stepOutputs: { ...session.stepOutputs, reportMarkdown: result.report } };
       setSession((current) => ({ ...current, status: "completed", childNameLabel: result.childName, lastCompletedStep: "done", stepOutputs: { ...current.stepOutputs, reportMarkdown: result.report } }));
-      say(`Đã tạo báo cáo cho ${result.childName} với ${result.goals.length} mục tiêu.${result.issues.length ? ` Còn ${result.issues.length} điểm cần xem lại.` : " Báo cáo đã qua kiểm tra."}`, completed.id, sourceFileName);
+      say(`Đã tạo báo cáo cho ${result.childName} với ${result.goals.length} mục tiêu.${result.issues.length ? ` Còn ${result.issues.length} điểm cần xem lại.` : " Báo cáo đã qua kiểm tra."}`, session.id, sourceFileName);
     } catch (error) {
       setTrace((events) => events.map((item) => item.status === "active" ? { ...item, status: "error" as const, text: `${item.text} - lỗi` } : item));
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -278,12 +276,18 @@ export function App() {
         }));
       }, {
         resume: resume ? { lastCompletedStep: currentSession.lastCompletedStep, ...currentSession.stepOutputs } : undefined,
-        onCheckpoint: (checkpoint) => persist({ ...currentSession, lastCompletedStep: checkpoint.lastCompletedStep, stepOutputs: checkpointOutputs(checkpoint), stepTraceLog: currentSession.stepTraceLog }),
+        onCheckpoint: (checkpoint) => persist({
+          ...currentSession,
+          childNameLabel: checkpoint.analysisJson?.administrative.childName?.trim() || currentSession.childNameLabel,
+          lastCompletedStep: checkpoint.lastCompletedStep,
+          stepOutputs: checkpointOutputs(checkpoint),
+          stepTraceLog: currentSession.stepTraceLog,
+        }),
       });
       const successMessage: ChatMessage = {
         id: crypto.randomUUID(), role: "assistant",
         text: `Đã tạo báo cáo cho ${result.childName} từ ${job.fileName}.`, report: true,
-        reportSessionId: currentSession.id, reportFileName: job.fileName, createdAt: Date.now(),
+        reportSessionId: currentSession.id, reportFileName: buildFileChipName({ ...currentSession, childNameLabel: result.childName }), createdAt: Date.now(),
       };
       persist({ ...currentSession, status: "completed", childNameLabel: result.childName, lastCompletedStep: "done", stepOutputs: { ...currentSession.stepOutputs, reportMarkdown: result.report }, messages: [...currentSession.messages, successMessage] });
       setBatchJobs((jobs) => jobs.map((item) => item.id === job.id ? { ...item, status: "completed", progress: 100, currentStatus: "Đã xử lý xong", report: result.report, session: currentSession } : item));
@@ -303,8 +307,7 @@ export function App() {
   async function downloadAll(completedSessions: ReportSession[]) {
     for (const completed of completedSessions.filter((item) => item.status === "completed" && item.stepOutputs.reportMarkdown)) {
       const blob = await buildDocx(completed.stepOutputs.reportMarkdown!);
-      const name = safeFilePart(completed.childNameLabel || completed.sourceFileName?.replace(/\.docx$/i, "") || "bao-cao");
-      downloadBlob(blob, `${name}_${completed.reportDate ?? today()}.docx`);
+      downloadBlob(blob, buildFileName(completed));
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
   }
@@ -405,7 +408,7 @@ export function App() {
           <article key={message.id} className={`bubble ${message.role}`}>
             <p>{message.text}</p>
             {message.report && <button className="chip" onClick={() => openReportForSession(message.reportSessionId ?? session.id)}>
-              📄 Báo cáo can thiệp{message.reportFileName ? ` · ${message.reportFileName.replace(/\.docx$/i, "")}` : ""}
+              📄 {buildFileChipName(message.reportSessionId ? (loadSession(message.reportSessionId) ?? session) : session)}
             </button>}
           </article>
         ))}
@@ -450,7 +453,7 @@ export function App() {
             <button onClick={() => navigator.clipboard.writeText(report)}>Sao chép</button>
             <label><input type="checkbox" checked={darkMode} onChange={(event) => setDarkMode(event.target.checked)} /> Chế độ tối</label>
             <button onClick={() => downloadMarkdown(report, activeReportSession.childNameLabel || "bao-cao", activeReportSession.reportDate ?? today())}>Tải Markdown</button>
-            <button onClick={() => downloadDocx(report, activeReportSession.childNameLabel || "bao-cao", activeReportSession.reportDate ?? today())}>Tải Word</button>
+            <button onClick={() => downloadDocx(report, activeReportSession)}>Tải Word</button>
           </div>
           <textarea className="reportEdit" value={report} onChange={(event) => updateActiveReport(event.target.value)} />
         </aside>

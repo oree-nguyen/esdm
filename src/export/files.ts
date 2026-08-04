@@ -1,4 +1,5 @@
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
+import type { ReportSession } from '../types';
 
 const slug = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 const download = (blob: Blob, filename: string) => { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); setTimeout(() => URL.revokeObjectURL(url), 0); };
@@ -30,7 +31,31 @@ export function downloadBlob(blob: Blob, filename: string) {
   download(blob, filename);
 }
 
-export async function downloadDocx(report: string, name: string, date: string) {
+const normalizedDate = (value?: string) => {
+  const date = value?.trim() || new Date().toLocaleDateString('vi-VN');
+  const iso = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[3]}-${iso[2]}-${iso[1]}`;
+  return date.replace(/\//g, '-');
+};
+
+const normalizedChildName = (value?: string) => (value?.trim() || 'Khong ro ten')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/đ/gi, (letter) => letter === 'Đ' ? 'D' : 'd')
+  .replace(/[^a-zA-Z0-9\s]/g, '')
+  .trim()
+  .replace(/\s+/g, '_') || 'Khong_ro_ten';
+
+export function buildFileName(session: ReportSession) {
+  return `Bao_cao_${normalizedChildName(session.childNameLabel)}_${normalizedDate(session.reportDate)}.docx`;
+}
+
+export function buildFileChipName(session: ReportSession) {
+  if (!session.childNameLabel?.trim() && session.sourceFileName?.trim()) return session.sourceFileName.trim();
+  return `${normalizedChildName(session.childNameLabel)}_${normalizedDate(session.reportDate)}.docx`;
+}
+
+export async function downloadDocx(report: string, session: ReportSession) {
   const blob = await buildDocx(report);
-  download(blob, `${slug(name)}-${date}.docx`);
+  download(blob, buildFileName(session));
 }
