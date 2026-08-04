@@ -50,6 +50,7 @@ const messageOf = (status: number) =>
           : "Không thể gọi dịch vụ AI.";
 
 const MAX_REQUEST_ATTEMPTS = 4;
+const CONNECTION_TIMEOUT_MS = 30_000;
 
 const waitForRetry = (milliseconds: number, signal: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -252,10 +253,18 @@ async function requestAi(
   }
 
   for (let attempt = 0; attempt < MAX_REQUEST_ATTEMPTS; attempt++) {
+    const requestController = new AbortController();
+    let connectionTimedOut = false;
+    const connectionTimer = globalThis.setTimeout(() => {
+      connectionTimedOut = true;
+      requestController.abort();
+    }, CONNECTION_TIMEOUT_MS);
+    const abortFromUser = () => requestController.abort();
+    signal.addEventListener("abort", abortFromUser, { once: true });
     try {
       const response = await fetch(url, {
         method: "POST",
-        signal,
+        signal: requestController.signal,
         headers,
         body: JSON.stringify({
           model,
@@ -273,6 +282,7 @@ async function requestAi(
           temperature: role === "writer" ? 0.45 : 0.15,
         }),
       });
+      globalThis.clearTimeout(connectionTimer);
 
       if (!response.ok) {
         const rawError = await response.text();
@@ -300,6 +310,21 @@ async function requestAi(
       return await readAiStream(response, model, role, debugEnabled);
     } catch (error) {
       if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+      if (connectionTimedOut) {
+        if (debugEnabled)
+          console.debug("OpenRouter connection timeout", {
+            attempt: attempt + 1,
+            nextRetry: attempt < MAX_REQUEST_ATTEMPTS - 1,
+          });
+        if (attempt < MAX_REQUEST_ATTEMPTS - 1) {
+          await waitForRetry(Math.min(1_000 * 2 ** attempt, 8_000), signal);
+          continue;
+        }
+        throw new AiError(
+          "network",
+          `Không thiết lập được kết nối streaming tới OpenRouter sau ${MAX_REQUEST_ATTEMPTS} lần thử. Model: ${model}. API: ${url}.`,
+        );
+      }
       if (error instanceof AiError) throw error;
       if (attempt < MAX_REQUEST_ATTEMPTS - 1) {
         await waitForRetry(Math.min(1_000 * 2 ** attempt, 8_000), signal);
@@ -310,6 +335,9 @@ async function requestAi(
           "network",
           `Không thể gửi yêu cầu tới OpenRouter. Model: ${model}. API: ${url}. Chi tiết trình duyệt: ${error instanceof Error ? error.message : String(error)}. Nếu OpenRouter Logs trống, lỗi xảy ra trước khi OpenRouter tạo transaction.`,
         );
+    } finally {
+      globalThis.clearTimeout(connectionTimer);
+      signal.removeEventListener("abort", abortFromUser);
     }
   }
   throw new AiError("network", "Mất kết nối.");
