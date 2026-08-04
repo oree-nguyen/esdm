@@ -192,17 +192,6 @@ export async function runWorkflow(
   const analysis = options.resume?.analysisJson ?? await askJson<Analysis>("analyzer", ANALYZER_PROMPT, input.sourceData, normalizeAnalysis, analysisJsonSchema, "analysis", settings, signal);
   checkpoint({ ...options.resume, lastCompletedStep: "analysis", analysisJson: analysis, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
   step("ruleEngineAnalysis", "Đang kiểm tra dữ liệu phân tích theo quy tắc");
-  const missingAdministrative = analysis.administrative.missingFields.filter(
-    (field) => field === "childName" || field === "birthDate",
-  );
-  if (missingAdministrative.length) {
-    const labels = missingAdministrative.map((field) =>
-      field === "childName" ? "tên trẻ" : "ngày sinh",
-    );
-    throw new Error(
-      `Dữ liệu bạn cung cấp chưa có ${labels.join(" và ")}. Vui lòng bổ sung rồi gửi lại.`,
-    );
-  }
   input = {
     ...input,
     childName: analysis.administrative.childName,
