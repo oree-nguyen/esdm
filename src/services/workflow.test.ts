@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseGoalsMarkdown } from "./workflow";
+import { isCompleteReportMarkdown, parseGoalsMarkdown } from "./workflow";
 
 describe("parseGoalsMarkdown", () => {
   it("accepts bold DeepSeek labels and full-width colons", () => {
@@ -27,5 +27,23 @@ describe("parseGoalsMarkdown", () => {
 
   it("requests one repair when essential goal content is missing", () => {
     expect(parseGoalsMarkdown("## MỤC TIÊU ĐÃ CHỌN\n### 1. Nhận thức")).toBeUndefined();
+  });
+});
+
+describe("isCompleteReportMarkdown", () => {
+  it("rejects a fixer explanation that would overwrite the report", () => {
+    expect(
+      isCompleteReportMarkdown("Không có mục Markdown nào được gửi kèm để sửa."),
+    ).toBe(false);
+  });
+
+  it("accepts a report only when all seven required sections exist", () => {
+    expect(
+      isCompleteReportMarkdown(
+        ["I", "II", "III", "IV", "V", "VI", "VII"]
+          .map((roman) => `## ${roman}. MỤC ${roman}`)
+          .join("\n"),
+      ),
+    ).toBe(true);
   });
 });

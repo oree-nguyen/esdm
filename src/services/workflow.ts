@@ -185,6 +185,13 @@ export const parseGoalsMarkdown = (markdown: string) => {
 };
 const parseReviewMarkdown = (markdown: string) => { const issueLines=markdown.match(/^\s*-\s*\[(\d+)\]\[(critical|warning|format)\]\[([^\]]+)\]\s*vấn đề:\s*(.*?)\s*—\s*căn cứ:\s*(.*?)\s*—\s*cách sửa:\s*(.*)$/gmi); if(!issueLines && !/^##\s+LỖI/m.test(markdown))return undefined; return {issues:(issueLines??[]).map(line=>{const m=line.match(/^\s*-\s*\[(\d+)\]\[(critical|warning|format)\]\[([^\]]+)\]\s*vấn đề:\s*(.*?)\s*—\s*căn cứ:\s*(.*?)\s*—\s*cách sửa:\s*(.*)$/i)!;return {criterionId:Number(m[1]),severity:m[2] as "critical"|"warning"|"format",section:m[3],problem:m[4],evidence:m[5],suggestedFix:m[6]}})}; };
 const reportSections = (report: string) => report.split(/(?=^##\s+)/m).filter(Boolean);
+export const isCompleteReportMarkdown = (report: string | undefined) =>
+  Boolean(
+    report &&
+      ["I", "II", "III", "IV", "V", "VI", "VII"].every((roman) =>
+        new RegExp(`^##\\s+${roman}\\.`, "m").test(report),
+      ),
+  );
 const comparableSkill = (value: string) =>
   value
     .normalize("NFC")
@@ -318,21 +325,52 @@ export async function runWorkflow(
     );
   checkpoint({ ...options.resume, lastCompletedStep: "goalSelection", analysisJson: analysis, goalsJson: goals, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
   step("writer", "Đang viết báo cáo chức năng hiện tại");
-  let report = options.resume?.reportMarkdown ?? await askAi(
-    "writer",
-    WRITER_PROMPT,
-    JSON.stringify({ input, analysis, goals }),
-    settings,
-    signal,
-  );
-  checkpoint({ ...options.resume, lastCompletedStep: "writer", analysisJson: analysis, goalsJson: goals, reportMarkdown: report, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
+  let report = isCompleteReportMarkdown(options.resume?.reportMarkdown)
+    ? options.resume!.reportMarkdown!
+    : isCompleteReportMarkdown(options.resume?.writerReportMarkdown)
+      ? options.resume!.writerReportMarkdown!
+      : await askAi(
+          "writer",
+          WRITER_PROMPT,
+          JSON.stringify({ input, analysis, goals }),
+          settings,
+          signal,
+        );
+  if (!isCompleteReportMarkdown(report))
+    throw new Error("Model viết báo cáo không trả đủ cấu trúc Markdown I–VII.");
+  const writerReport = isCompleteReportMarkdown(options.resume?.writerReportMarkdown)
+    ? options.resume!.writerReportMarkdown!
+    : report;
+  checkpoint({ ...options.resume, lastCompletedStep: "writer", analysisJson: analysis, goalsJson: goals, writerReportMarkdown: writerReport, reportMarkdown: report, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
+  const requestTargetedFix = async (currentReport: string, currentIssues: RuleCheckResult[]) => {
+    const sectionsToFix = reportSections(currentReport).filter((section) => {
+      const heading = section.match(/^##\s+(.+)$/m)?.[1] ?? "";
+      return currentIssues.some((issue) => issue.section && heading.includes(issue.section));
+    });
+    const contextSlice = sectionsToFix.length ? sectionsToFix.join("\n") : currentReport;
+    const fixedSections = await askAi(
+      "fixer",
+      FIXER_PROMPT,
+      `BÁO CÁO MARKDOWN CẦN SỬA:\n\n${contextSlice}\n\nDANH SÁCH LỖI CẦN SỬA:\n${JSON.stringify(currentIssues, null, 2)}`,
+      settings,
+      signal,
+    );
+    if (!/^##\s+/m.test(fixedSections))
+      throw new Error("Model sửa lỗi không trả về mục Markdown hợp lệ; báo cáo trước khi sửa đã được giữ nguyên.");
+    const candidate = sectionsToFix.length
+      ? mergeSections(currentReport, fixedSections)
+      : fixedSections;
+    if (!isCompleteReportMarkdown(candidate))
+      throw new Error("Model sửa lỗi trả về báo cáo thiếu cấu trúc I–VII; báo cáo trước khi sửa đã được giữ nguyên.");
+    return candidate;
+  };
   let issues: RuleCheckResult[] = options.resume?.reviewIssuesJson ?? [];
   for (let round = options.resume?.lastCompletedStep === "review" ? 0 : options.resume?.fixRoundCount ?? 0; round < 3; round++) {
     if (options.resume?.lastCompletedStep === "review" && round === 0) {
       step("fixer", "Đang sửa các lỗi được phát hiện");
-      report = await askAi("fixer", FIXER_PROMPT, JSON.stringify({ report, issues }), settings, signal);
-      checkpoint({ ...options.resume, lastCompletedStep: "fixer", analysisJson: analysis, goalsJson: goals, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: 1 });
-      options.resume = { ...options.resume, lastCompletedStep: "fixer", fixRoundCount: 1 };
+      report = await requestTargetedFix(report, issues);
+      checkpoint({ ...options.resume, lastCompletedStep: "fixer", analysisJson: analysis, goalsJson: goals, writerReportMarkdown: writerReport, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: 1 });
+      options.resume = { ...options.resume, lastCompletedStep: "fixer", writerReportMarkdown: writerReport, reportMarkdown: report, fixRoundCount: 1 };
       continue;
     }
     step("reviewer", "Đang kiểm tra báo cáo theo 20 tiêu chí");
@@ -353,27 +391,17 @@ export async function runWorkflow(
       ...rules,
       ...review.issues.map((x) => ({ id: x.criterionId, title: `Tiêu chí ${x.criterionId}`, passed: false, severity: x.severity, message: x.problem, section: x.section, suggestedFix: x.suggestedFix, source: "reviewer" as const })),
     ].filter((x) => !x.passed);
-    checkpoint({ ...options.resume, lastCompletedStep: "review", analysisJson: analysis, goalsJson: goals, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: round });
+    checkpoint({ ...options.resume, lastCompletedStep: "review", analysisJson: analysis, goalsJson: goals, writerReportMarkdown: writerReport, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: round });
     if (passesReview(issues)) break;
     if (round === 2) break;
     step("fixer", "Đang sửa các lỗi được phát hiện");
-    const sectionsToFix = reportSections(report).filter(section => {
-      const heading = section.match(/^##\s+(.+)$/m)?.[1] ?? "";
-      return issues.some(issue => issue.section && heading.includes(issue.section));
-    });
-    const contextSlice = sectionsToFix.length ? sectionsToFix.join("") : report;
-    const fixedSections = await askAi(
-      "fixer",
-      FIXER_PROMPT,
-      JSON.stringify({ contextSlice, sectionsToFix: sectionsToFix.map(section => section.match(/^##\s+(.+)$/m)?.[1]), issues }),
-      settings,
-      signal,
-    );
-    report = sectionsToFix.length ? mergeSections(report, fixedSections) : fixedSections;
-    checkpoint({ ...options.resume, lastCompletedStep: "fixer", analysisJson: analysis, goalsJson: goals, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: round + 1 });
+    report = await requestTargetedFix(report, issues);
+    checkpoint({ ...options.resume, lastCompletedStep: "fixer", analysisJson: analysis, goalsJson: goals, writerReportMarkdown: writerReport, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: round + 1 });
   }
+  if (!isCompleteReportMarkdown(report))
+    throw new Error("Báo cáo cuối không đủ cấu trúc Markdown I–VII.");
   step("done", "Đã xử lý xong");
   finishActive();
-  checkpoint({ ...options.resume, lastCompletedStep: "done", analysisJson: analysis, goalsJson: goals, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
+  checkpoint({ ...options.resume, lastCompletedStep: "done", analysisJson: analysis, goalsJson: goals, writerReportMarkdown: writerReport, reportMarkdown: report, reviewIssuesJson: issues, fixRoundCount: options.resume?.fixRoundCount ?? 0 });
   return { report, goals, issues, childName: input.childName };
 }

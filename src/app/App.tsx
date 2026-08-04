@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import mammoth from "mammoth";
 import { APP_NAME, DEFAULT_SETTINGS } from "../config/app";
 import { downloadDocx, downloadMarkdown } from "../export/files";
-import { runWorkflow } from "../services/workflow";
+import { isCompleteReportMarkdown, runWorkflow } from "../services/workflow";
 import { StepTraceStatus } from "../components/chat/StepTraceStatus";
 import { deleteSession, loadActiveSession, loadDraft, loadSession, loadSessionIndex, saveDraft, saveSession } from "../storage/draftStorage";
 import type {
@@ -65,6 +65,22 @@ export function App() {
     return () => clearInterval(id);
   }, [working]);
   useEffect(() => { document.documentElement.classList.toggle("dark", darkMode); }, [darkMode]);
+  useEffect(() => {
+    if (session.status !== "completed" || !report || isCompleteReportMarkdown(report)) return;
+    setReport("");
+    setSession((current) => ({
+      ...current,
+      status: "error",
+      lastCompletedStep: current.stepOutputs.goalsJson?.length ? "goalSelection" : "analysis",
+      lastError: "Báo cáo đã bị ghi đè bởi phản hồi sửa lỗi không hợp lệ; cần tạo lại từ checkpoint.",
+      stepOutputs: {
+        ...current.stepOutputs,
+        reportMarkdown: undefined,
+        reviewIssuesJson: undefined,
+        fixRoundCount: 0,
+      },
+    }));
+  }, [report, session.status]);
   const say = (text: string, reportChip = false) =>
     setMessages((m) => [
       ...m,
@@ -157,7 +173,7 @@ export function App() {
                   event,
                 ],
           ),
-        { resume: resume ? { lastCompletedStep: session.lastCompletedStep, ...session.stepOutputs } : undefined, onCheckpoint: (checkpoint) => setSession((s) => ({ ...s, lastCompletedStep: checkpoint.lastCompletedStep, stepOutputs: { analysisJson: checkpoint.analysisJson, goalsJson: checkpoint.goalsJson, reportMarkdown: checkpoint.reportMarkdown, reviewIssuesJson: checkpoint.reviewIssuesJson, fixRoundCount: checkpoint.fixRoundCount } })) },
+        { resume: resume ? { lastCompletedStep: session.lastCompletedStep, ...session.stepOutputs } : undefined, onCheckpoint: (checkpoint) => setSession((s) => ({ ...s, lastCompletedStep: checkpoint.lastCompletedStep, stepOutputs: { analysisJson: checkpoint.analysisJson, goalsJson: checkpoint.goalsJson, writerReportMarkdown: checkpoint.writerReportMarkdown, reportMarkdown: checkpoint.reportMarkdown, reviewIssuesJson: checkpoint.reviewIssuesJson, fixRoundCount: checkpoint.fixRoundCount } })) },
       );
       setReport(result.report);
       setSession((s) => ({ ...s, status: "completed", childNameLabel: result.childName, lastCompletedStep: "done" }));
@@ -287,8 +303,7 @@ export function App() {
                   setSettings({ ...settings, testMode: e.target.checked })
                 }
               />{" "}
-              Cháº¿ Ä‘á»™ test (dÃ¹ng openai/gpt-oss-20b:free cho cáº£ 4 vai
-              trÃ²)
+              Chế độ test (dùng DeepSeek V4 Flash trả phí cho cả 4 vai trò)
             </label>
             <button
               onClick={() => downloadMarkdown(report, "bao-cao", today())}
