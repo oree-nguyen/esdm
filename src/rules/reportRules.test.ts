@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runRules } from './reportRules';
+import { parseGoalsMarkdown } from '../services/workflow';
 import type { Analysis, ChildInput, GoalDraft } from '../types';
 const input:ChildInput={childName:'An',birthDate:'01/01/2020',evaluator:'Cô Mai',reportDate:'2026-08-03',interventionPeople:'Giáo viên và gia đình',sourceData:'An chưa ổn định khi gọi tên.'};
 const analysis:Analysis={administrative:{childName:'An',birthDate:'01/01/2020',evaluator:'Cô Mai',missingFields:[]},domains:[{name:'Giao tiếp tiếp nhận',skills:[{skill:'Đáp lại khi gọi tên',category:'emerging',evidence:'Chưa ổn định',supportLevel:'',conflict:false,missingData:false}]}],conflicts:[],missingData:[],goalCandidates:[]};
@@ -23,7 +24,21 @@ describe('rule engine',()=>{
   it('rejects more than three priority skills in one domain',()=>expect(runRules(report('### Ưu tiên phát triển\n- a\n- b\n- c\n- d'),input,analysis,[]).find(x=>x.id===10)?.passed).toBe(false));
   it('rejects a goal section without the seven fixed topics and two family activities',()=>expect(runRules(report('', '### 1\n### 2\n### 3\n### 4\n### 5\n### 6\n### 7'),input,analysis,[]).find(x=>x.id===13)?.passed).toBe(false));
   it('reports a missing topic when the parsed output contains only six goals',()=>{
-    const sixGoals=Array.from({length:6},(_,index)=>({...goal,id:`goal-${index+1}`}));
-    expect(runRules('',input,analysis,sixGoals).find(x=>x.id===13)?.passed).toBe(false);
+    const parsed = parseGoalsMarkdown(`## MỤC TIÊU CÁ NHÂN
+### 1. Kỹ năng chơi – tương tác xã hội
+- Trạng thái: không có ứng viên phù hợp trong dữ liệu
+### 2. Giao tiếp diễn đạt trong thực tế hàng ngày
+- Trạng thái: không có ứng viên phù hợp trong dữ liệu
+### 3. Nhận thức phục vụ thực tế học tập và sinh hoạt hàng ngày
+- Trạng thái: không có ứng viên phù hợp trong dữ liệu
+### 4. Nghe hiểu khi giao tiếp
+- Trạng thái: không có ứng viên phù hợp trong dữ liệu
+### 5. Khả năng học tập – Ghi nhớ
+- Trạng thái: không có ứng viên phù hợp trong dữ liệu
+## MỤC TIÊU NHÓM
+### 1. Kỹ năng tự lập
+- Trạng thái: không có ứng viên phù hợp trong dữ liệu`);
+    expect(parsed).toBeDefined();
+    expect(runRules('',input,analysis,parsed!.selectedGoals).find(x=>x.id===13)?.passed).toBe(false);
   });
 });
