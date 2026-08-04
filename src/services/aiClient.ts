@@ -49,9 +49,6 @@ const messageOf = (status: number) =>
           ? "Mô hình không khả dụng."
           : "Không thể gọi dịch vụ AI.";
 
-// Free providers can queue before returning a long report. Twenty-five seconds
-// cancelled otherwise healthy generations too early.
-const REQUEST_TIMEOUT_MS = 120_000;
 const MAX_REQUEST_ATTEMPTS = 4;
 
 const waitForRetry = (milliseconds: number, signal: AbortSignal) =>
@@ -106,6 +103,111 @@ interface AiResponse {
   provider?: string;
 }
 
+interface AiUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  prompt_tokens_details?: {
+    cached_tokens?: number;
+    cache_write_tokens?: number;
+  };
+}
+
+interface AiPayload {
+  model?: string;
+  provider?: string;
+  choices?: {
+    delta?: { content?: AiContent };
+    message?: { content?: AiContent };
+  }[];
+  usage?: AiUsage;
+  error?: { message?: string; code?: number; metadata?: { error_type?: string } };
+}
+
+export const sseDataValue = (line: string): string | undefined => {
+  if (!line.startsWith("data:")) return undefined;
+  return line.slice(5).trimStart();
+};
+
+const logUsage = (
+  usage: AiUsage | undefined,
+  role: ModelRole,
+  model: string,
+  provider: string | undefined,
+) => {
+  const cachedTokens = usage?.prompt_tokens_details?.cached_tokens ?? 0;
+  const promptTokens = usage?.prompt_tokens;
+  console.debug("Prompt cache usage", {
+    role,
+    model,
+    provider,
+    cache_hit_tokens: cachedTokens,
+    cache_miss_tokens:
+      promptTokens === undefined ? undefined : Math.max(promptTokens - cachedTokens, 0),
+    cache_write_tokens: usage?.prompt_tokens_details?.cache_write_tokens ?? 0,
+  });
+};
+
+async function readAiStream(
+  response: Response,
+  fallbackModel: string,
+  role: ModelRole,
+  debugEnabled: boolean,
+): Promise<AiResponse> {
+  if (!response.body)
+    throw new AiError("network", "OpenRouter không trả về luồng dữ liệu phản hồi.");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  let responseModel = fallbackModel;
+  let provider = response.headers.get("X-Provider-Name") ?? undefined;
+  let usage: AiUsage | undefined;
+
+  const consumeEvent = (event: string) => {
+    for (const line of event.split(/\r?\n/)) {
+      const data = sseDataValue(line);
+      if (data === undefined || data === "" || data === "[DONE]") continue;
+      let payload: AiPayload;
+      try {
+        payload = JSON.parse(data) as AiPayload;
+      } catch {
+        throw new AiError("format", "OpenRouter trả về một sự kiện streaming không hợp lệ.");
+      }
+      if (payload.error) {
+        const errorType = payload.error.metadata?.error_type;
+        throw new AiError(
+          "api",
+          `${payload.error.message ?? "OpenRouter dừng luồng phản hồi."}${errorType ? ` (${errorType})` : ""}`,
+          payload.error.code,
+        );
+      }
+      responseModel = payload.model ?? responseModel;
+      provider = payload.provider ?? provider;
+      usage = payload.usage ?? usage;
+      text +=
+        normalizeContent(payload.choices?.[0]?.delta?.content) ??
+        normalizeContent(payload.choices?.[0]?.message?.content) ??
+        "";
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const events = buffer.split(/\r?\n\r?\n/);
+    buffer = events.pop() ?? "";
+    events.forEach(consumeEvent);
+    if (done) break;
+  }
+  if (buffer.trim()) consumeEvent(buffer);
+
+  if (debugEnabled) logUsage(usage, role, responseModel, provider);
+  if (!text.trim()) throw new AiError("format", "Dịch vụ trả về nội dung trống.");
+  return { text, model: responseModel, provider };
+}
+
 async function requestAi(
   role: ModelRole,
   system: string,
@@ -150,17 +252,15 @@ async function requestAi(
   }
 
   for (let attempt = 0; attempt < MAX_REQUEST_ATTEMPTS; attempt++) {
-    const timeoutController = new AbortController();
-    const timer = window.setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS);
-    const abortFromUser = () => timeoutController.abort();
-    signal.addEventListener("abort", abortFromUser, { once: true });
     try {
       const response = await fetch(url, {
         method: "POST",
-        signal: timeoutController.signal,
+        signal,
         headers,
         body: JSON.stringify({
           model,
+          stream: true,
+          stream_options: { include_usage: true },
           messages: [
             {
               role: "system",
@@ -191,45 +291,15 @@ async function requestAi(
         );
       }
 
-      const json = (await response.json()) as {
-        model?: string;
-        provider?: string;
-        choices?: { message?: { content?: AiContent } }[];
-        usage?: {
-          prompt_tokens?: number;
-          completion_tokens?: number;
-          total_tokens?: number;
-          prompt_tokens_details?: {
-            cached_tokens?: number;
-            cache_write_tokens?: number;
-          };
-        };
-      };
       if (debugEnabled) {
-        const usage = json.usage;
-        const cachedTokens = usage?.prompt_tokens_details?.cached_tokens ?? 0;
-        const promptTokens = usage?.prompt_tokens;
-        console.debug("Prompt cache usage", {
-          role,
-          model: json.model ?? model,
-          provider: json.provider,
-          cache_hit_tokens: cachedTokens,
-          cache_miss_tokens:
-            promptTokens === undefined ? undefined : Math.max(promptTokens - cachedTokens, 0),
-          cache_write_tokens: usage?.prompt_tokens_details?.cache_write_tokens ?? 0,
+        console.debug("OpenRouter stream connected", {
+          generationId: response.headers.get("X-Generation-Id"),
+          provider: response.headers.get("X-Provider-Name"),
         });
       }
-      const text = normalizeContent(json.choices?.[0]?.message?.content);
-      if (!text) throw new AiError("format", "Dịch vụ trả về nội dung không đúng định dạng.");
-      return { text, model: json.model ?? model, provider: json.provider };
+      return await readAiStream(response, model, role, debugEnabled);
     } catch (error) {
       if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-      if (timeoutController.signal.aborted) {
-        throw new AiError(
-          "network",
-          `OpenRouter không phản hồi sau 120 giây. Model: ${model}. API: ${url}. Nếu OpenRouter Logs trống, request chưa tới OpenRouter; hãy kiểm tra mạng, khóa API, workspace và địa chỉ API.`,
-        );
-      }
       if (error instanceof AiError) throw error;
       if (attempt < MAX_REQUEST_ATTEMPTS - 1) {
         await waitForRetry(Math.min(1_000 * 2 ** attempt, 8_000), signal);
@@ -240,9 +310,6 @@ async function requestAi(
           "network",
           `Không thể gửi yêu cầu tới OpenRouter. Model: ${model}. API: ${url}. Chi tiết trình duyệt: ${error instanceof Error ? error.message : String(error)}. Nếu OpenRouter Logs trống, lỗi xảy ra trước khi OpenRouter tạo transaction.`,
         );
-    } finally {
-      window.clearTimeout(timer);
-      signal.removeEventListener("abort", abortFromUser);
     }
   }
   throw new AiError("network", "Mất kết nối.");
